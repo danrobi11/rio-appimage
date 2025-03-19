@@ -2,7 +2,7 @@
 
 ![rio-logo](https://github.com/danrobi11/rio-appimage/blob/main/rio-resized.png)
 
-Welcome to the unofficial Rio AppImage—a portable, hardware-accelerated GPU terminal emulator based on [raphamorim/rio](https://github.com/raphamorim/rio), version 0.1.12. Built for Linux, this AppImage runs anywhere with no sandbox restrictions and a full system PATH—minimal fuss, maximum power!
+Welcome to the Unofficial Rio AppImage—a portable, hardware-accelerated GPU terminal emulator based on [raphamorim/rio](https://github.com/raphamorim/rio), version 0.1.12. Built for Linux, this AppImage runs anywhere with no sandbox restrictions and a full system PATH—minimal fuss, maximum power!
 
 ## Features
 - **Portable**: Single executable, no installation needed—download and run.
