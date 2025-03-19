@@ -1,6 +1,6 @@
 # Unofficial Rio AppImage
 
-![rio-logo](https://camo.githubusercontent.com/7b603d4b26e48c0057f7c640fc296918171bd932251df20cb7cfac4d3fbbf665/68747470733a2f2f72617068616d6f72696d2e696f2f72696f2f6173736574732f72696f2d6c6f676f2e706e67)
+![rio-logo](https://github.com/danrobi11/rio-appimage/blob/main/rio-resized.png)
 
 
 
