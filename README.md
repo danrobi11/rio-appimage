@@ -2,8 +2,23 @@
 
 ![rio-logo](https://github.com/danrobi11/rio-appimage/blob/main/rio-resized.png)
 
+Welcome to the unofficial Rio AppImage—a portable, hardware-accelerated GPU terminal emulator based on [raphamorim/rio](https://github.com/raphamorim/rio), version 0.1.12. Built for Linux, this AppImage runs anywhere with no sandbox restrictions and a full system PATH—minimal fuss, maximum power!
 
+## Features
+- **Portable**: Single executable, no installation needed—download and run.
+- **GPU-Accelerated**: Leverages `wgpu` for smooth, fast terminal rendering.
+- **No Sandbox**: Full system access for ultimate flexibility.
+- **Lightweight**: Bundled with just what’s needed to run Rio, nothing extra.
 
+## Usage
+
+1. **Download the AppImage**:
+   - Grab it from the [Releases page](https://github.com/danrobi11/rio-appimage/releases).
+
+2. **Make it Executable**:
+   ```
+   chmod +x rio-0.1.12-x86_64.AppImage
+```
 ## Dependencies for Building Rio AppImage
 
 Below is the complete list of dependencies used to build `rio-0.1.12-x86_64.AppImage`, tailored for a Debian Sid environment as of March 19, 2025.
@@ -11,7 +26,7 @@ Below is the complete list of dependencies used to build `rio-0.1.12-x86_64.AppI
 ### System Dependencies (via `apt`)
 
 Install with:
-```
+
 sudo apt update
 sudo apt install -y <packages>
 
@@ -53,3 +68,6 @@ Notes
 Source: https://github.com/raphamorim/rio/archive/refs/tags/v0.1.12.tar.gz.
 Runtime: Libraries bundled for portability.
 ```
+## Disclaimer
+
+This repository contains a script for building the rio-0.1.12-x86_64.AppImage. The script was created with assistance from Grok 3, an AI developed by xAI (https://grok.com). While efforts have been made to ensure the script functions correctly, it is provided "as is" without any warranties or guarantees of performance, reliability, or compatibility. Users are responsible for testing and verifying the script's output before use. Neither the repository owner nor xAI is liable for any issues, damages, or data loss that may arise from using this script or the resulting AppImage.
