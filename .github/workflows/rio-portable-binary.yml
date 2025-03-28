@@ -41,18 +41,9 @@ jobs:
           sed -i 's/FontRef::from_index(\([^)]*\))\.unwrap()/FontRef::from_index(\1).unwrap_or_else(|| { eprintln!("Font not found, using bundled DejaVu Sans Mono"); FontRef::from_index(DEJAVU_SANS_MONO, 0).expect("Bundled DejaVu Sans Mono index missing") })/' sugarloaf/src/font/mod.rs || true
           echo "Applied font fallback patch"
 
-      - name: Patch Rio to use portable config only
-        run: |
-          cd ~/rio-build/rio-0.2.11
-          sed -i 's|dirs::config_dir().unwrap().join("rio").join("config.toml")|match std::env::current_exe() { Ok(exe) => exe.parent().and_then(|p| p.parent()).map(|p| p.join("config").join("config.toml")).unwrap_or_default(), Err(_) => std::path::PathBuf::new() }|' rio/src/config/mod.rs || true
-          sed -i 's|std::fs::write.*config.toml.*|// Disabled config write: &|' rio/src/config/mod.rs || true
-          sed -i '/let config_path =/a if !config_path.exists() { eprintln!("Config not found at {:?}", config_path); return Config::default(); }' rio/src/config/mod.rs || true
-          echo "Patched Rio for portable config"
-
       - name: Patch grid storage to prevent capacity overflow
         run: |
           cd ~/rio-build/rio-0.2.11
-          # Cap cols and rows at 1024, check multiplication
           sed -i 's|pub fn new(cols: usize, rows: usize) -> Self {|pub fn new(cols: usize, rows: usize) -> Self { let cols = cols.min(1024); let rows = rows.min(1024); let capacity = cols.checked_mul(rows).unwrap_or(1024 * 1024);|' rio-backend/src/crosswords/grid/storage.rs || true
           sed -i 's|Vec::with_capacity(cols \* rows)|Vec::with_capacity(capacity)|' rio-backend/src/crosswords/grid/storage.rs || true
           echo "Patched grid storage with safe capacity"
@@ -137,12 +128,14 @@ jobs:
           ls -l "\$FONTCONFIG_FILE" || echo "Fontconfig file not found!"
           fc-list | grep "DejaVu Sans Mono" || echo "DejaVu Sans Mono not found in fontconfig!"
           CONFIG="\$DIR/../config/config.toml"
-          echo "Using config: \$CONFIG"
-          cat "\$CONFIG"
+          mkdir -p ~/.config/rio
+          cp "\$CONFIG" ~/.config/rio/config.toml || { echo "Failed to copy config"; exit 1; }
+          echo "Using config: ~/.config/rio/config.toml"
+          cat ~/.config/rio/config.toml
           "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" "\$@"
           echo "Rio closed. Checking ~/.config/rio/:"
-          ls -ld ~/.config/rio/ 2>/dev/null || echo "No ~/.config/rio/ created"
-          ls -l ~/.config/rio/config.toml 2>/dev/null || echo "No config.toml in ~/.config/rio/"
+          ls -ld ~/.config/rio/
+          ls -l ~/.config/rio/config.toml
           EOF
           chmod +x rio
           cat rio
