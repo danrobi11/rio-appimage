@@ -24,21 +24,31 @@ jobs:
             rustc cargo \
             libxkbcommon-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
             libx11-dev libxcb1-dev libxkbcommon-x11-dev libwayland-dev \
-            libfontconfig-dev
-      - name: Download Rio Terminal source
+            libfontconfig-dev fonts-dejavu-core
+      - name: Download Rio Terminal v0.2.11 source
         run: |
           mkdir -p ~/rio-build
           cd ~/rio-build
-          wget "https://github.com/raphamorim/rio/archive/refs/tags/v0.1.12.tar.gz" -O rio-0.1.12.tar.gz
-          tar -xzf rio-0.1.12.tar.gz
+          wget "https://github.com/raphamorim/rio/archive/refs/tags/v0.2.11.tar.gz" -O rio-0.2.11.tar.gz
+          tar -xzf rio-0.2.11.tar.gz
+      - name: Patch sugarloaf for font fallback and bundle DejaVu Sans Mono
+        run: |
+          cd ~/rio-build/rio-0.2.11
+          # Add DejaVu Sans Mono as a constant in the module
+          echo 'pub const DEJAVU_SANS_MONO: &[u8] = include_bytes!("DejaVuSansMono.ttf");' >> sugarloaf/src/font/mod.rs
+          # Copy the font file into the source directory
+          cp /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf sugarloaf/src/font/
+          # Patch FontRef::from_index .unwrap() calls to use bundled DejaVu Sans Mono as fallback
+          sed -i 's/FontRef::from_index(\([^)]*\))\.unwrap()/FontRef::from_index(\1).unwrap_or_else(|| { eprintln!("Font not found, using bundled DejaVu Sans Mono"); FontRef::from_index(DEJAVU_SANS_MONO, 0).expect("Bundled DejaVu Sans Mono index missing") })/' sugarloaf/src/font/mod.rs || true
+          echo "Applied font fallback patch with bundled DejaVu Sans Mono to sugarloaf/src/font/mod.rs"
       - name: Build Rio Terminal
         run: |
-          cd ~/rio-build/rio-0.1.12
+          cd ~/rio-build/rio-0.2.11
           cargo build --release
       - name: Install Rio to staging directory
         run: |
           mkdir -p ~/rio-install/usr/bin
-          cp ~/rio-build/rio-0.1.12/target/release/rio ~/rio-install/usr/bin/rio-bin
+          cp ~/rio-build/rio-0.2.11/target/release/rio ~/rio-install/usr/bin/rio-bin
       - name: Bundle all shared library dependencies
         run: |
           cd ~/rio-install
@@ -54,15 +64,59 @@ jobs:
           cp -v /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 usr/lib/ || { echo "Error: Failed to copy linker"; exit 1; }
           echo "Final library list in usr/lib:"
           ls -l usr/lib/
+      - name: Bundle font files and fontconfig config
+        run: |
+          cd ~/rio-install
+          mkdir -p usr/share/fonts/truetype/dejavu
+          cp -v /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf usr/share/fonts/truetype/dejavu/
+          mkdir -p usr/etc/fonts
+          cat > usr/etc/fonts/fonts.conf << EOF
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+          <fontconfig>
+            <dir prefix="relative">share/fonts</dir>
+            <cachedir prefix="relative">cache</cachedir>
+          </fontconfig>
+          EOF
+          mkdir -p usr/cache
+          export FONTCONFIG_FILE=$PWD/usr/etc/fonts/fonts.conf
+          fc-cache -fv ./usr/share/fonts
       - name: Ensure RPATH with patchelf
         run: |
-          patchelf --force-rpath --set-rpath \$ORIGIN/../lib ~/rio-install/usr/bin/rio-bin
+          cd ~/rio-install
+          patchelf --force-rpath --set-rpath \$ORIGIN/../lib usr/bin/rio-bin
+      - name: Create configuration file with font specification
+        run: |
+          cd ~/rio-install
+          mkdir -p usr/config
+          cat > usr/config/config.toml << EOF
+          use-fork = false
+          [fonts]
+          regular = { family = "DejaVu Sans Mono", style = "Normal" }
+          [colors]
+          background = "#000000"
+          foreground = "#00FFFF"
+          cursor = "#00FF00"
+          tabs = "#000000"
+          tabs-active = "#00FF00"
+          selection-foreground = "#00FFFF"
+          selection-background = "#000000"
+          black = "#000000"
+          EOF
+          chmod 644 usr/config/config.toml
+          cat usr/config/config.toml
       - name: Create launcher script
         run: |
           cd ~/rio-install/usr/bin
           cat > rio << EOF
           #!/bin/bash
           DIR="\$(dirname "\$(realpath "\$0")")"
+          export FONTCONFIG_FILE="\$DIR/../../etc/fonts/fonts.conf"
+          echo "Using FONTCONFIG_FILE: \$FONTCONFIG_FILE"
+          ls -l "\$FONTCONFIG_FILE" || echo "Fontconfig file not found!"
+          fc-list | grep "DejaVu Sans Mono" || echo "DejaVu Sans Mono not found in fontconfig!"
+          mkdir -p ~/.config/rio
+          cp "\$DIR/../config/config.toml" ~/.config/rio/config.toml || { echo "Failed to copy config.toml from \$DIR/../config/config.toml"; exit 1; }
           "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" "\$@"
           EOF
           chmod +x rio
@@ -70,15 +124,15 @@ jobs:
       - name: Create zip file with binary and libraries
         run: |
           cd ~/rio-install
-          zip -r ~/rio-0.1.12-portable.zip .
+          zip -r ~/rio-0.2.11-portable.zip .
       - name: Generate SHA256 checksum
         run: |
-          sha256sum ~/rio-0.1.12-portable.zip > ~/rio-0.1.12-portable.zip.sha256
-          cat ~/rio-0.1.12-portable.zip.sha256
+          sha256sum ~/rio-0.2.11-portable.zip > ~/rio-0.2.11-portable.zip.sha256
+          cat ~/rio-0.2.11-portable.zip.sha256
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: rio-portable
           path: |
-            ~/rio-0.1.12-portable.zip
-            ~/rio-0.1.12-portable.zip.sha256
+            ~/rio-0.2.11-portable.zip
+            ~/rio-0.2.11-portable.zip.sha256
