@@ -1,4 +1,4 @@
-name: Build Rio Terminal Portable Binary with Patch
+name: Build Rio Terminal Portable Binary
 
 on:
   push:
@@ -26,31 +26,22 @@ jobs:
             libx11-dev libxcb1-dev libxkbcommon-x11-dev libwayland-dev \
             libfontconfig-dev
 
-      - name: Download Rio Terminal source
+      - name: Download Rio Terminal v0.2.11 source
         run: |
           mkdir -p ~/rio-build
           cd ~/rio-build
-          wget "https://github.com/raphamorim/rio/archive/refs/tags/v0.1.12.tar.gz" -O rio-0.1.12.tar.gz
-          tar -xzf rio-0.1.12.tar.gz
-
-      - name: Apply patch to force black UI rendering
-        run: |
-          cd ~/rio-build/rio-0.1.12
-          # Example patch: Replace gray with black in a hypothetical file
-          echo "Patching source to force black UI elements..."
-          # This is a placeholder; adjust based on actual file and line
-          sed -i 's/Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 }/Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }/g' src/screen/tabs.rs || true
-          # Add more sed commands or a .patch file if needed
+          wget "https://github.com/raphamorim/rio/archive/refs/tags/v0.2.11.tar.gz" -O rio-0.2.11.tar.gz
+          tar -xzf rio-0.2.11.tar.gz
 
       - name: Build Rio Terminal
         run: |
-          cd ~/rio-build/rio-0.1.12
+          cd ~/rio-build/rio-0.2.11
           cargo build --release
 
       - name: Install Rio to staging directory
         run: |
           mkdir -p ~/rio-install/usr/bin
-          cp ~/rio-build/rio-0.1.12/target/release/rio ~/rio-install/usr/bin/rio-bin
+          cp ~/rio-build/rio-0.2.11/target/release/rio ~/rio-install/usr/bin/rio-bin
 
       - name: Bundle all shared library dependencies
         run: |
@@ -75,20 +66,20 @@ jobs:
       - name: Create configuration file
         run: |
           mkdir -p ~/rio-install/usr/config
-          cat > ~/rio-install/usr/config/rio.toml << EOF
+          cat > ~/rio-install/usr/config/config.toml << EOF
           use-fork = false
           [colors]
           background = "#000000"
           foreground = "#00FFFF"
-          cursor = "#9400D3"
+          cursor = "#00FF00"
           tabs = "#000000"
           tabs-active = "#000000"
           selection-foreground = "#00FFFF"
           selection-background = "#000000"
           black = "#000000"
           EOF
-          chmod 644 ~/rio-install/usr/config/rio.toml
-          cat ~/rio-install/usr/config/rio.toml
+          chmod 644 ~/rio-install/usr/config/config.toml
+          cat ~/rio-install/usr/config/config.toml
 
       - name: Create launcher script
         run: |
@@ -96,7 +87,7 @@ jobs:
           cat > rio << EOF
           #!/bin/bash
           DIR="\$(dirname "\$(realpath "\$0")")"
-          "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" --config-file "\$DIR/../config/rio.toml" "\$@"
+          "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" --config-file "\$DIR/../config/config.toml" "\$@"
           EOF
           chmod +x rio
           cat rio
@@ -104,17 +95,17 @@ jobs:
       - name: Create zip file with binary and libraries
         run: |
           cd ~/rio-install
-          zip -r ~/rio-0.1.12-portable.zip .
+          zip -r ~/rio-0.2.11-portable.zip .
 
       - name: Generate SHA256 checksum
         run: |
-          sha256sum ~/rio-0.1.12-portable.zip > ~/rio-0.1.12-portable.zip.sha256
-          cat ~/rio-0.1.12-portable.zip.sha256
+          sha256sum ~/rio-0.2.11-portable.zip > ~/rio-0.2.11-portable.zip.sha256
+          cat ~/rio-0.2.11-portable.zip.sha256
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: rio-portable
           path: |
-            ~/rio-0.1.12-portable.zip
-            ~/rio-0.1.12-portable.zip.sha256
+            ~/rio-0.2.11-portable.zip
+            ~/rio-0.2.11-portable.zip.sha256
