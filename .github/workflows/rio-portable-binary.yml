@@ -100,13 +100,15 @@ jobs:
           chmod 644 ~/rio-install/usr/config/config.toml
           cat ~/rio-install/usr/config/config.toml
 
-      - name: Create launcher script with fontconfig env
+      - name: Create launcher script
         run: |
           cd ~/rio-install/usr/bin
           cat > rio << EOF
           #!/bin/bash
           DIR="\$(dirname "\$(realpath "\$0")")"
           export FONTCONFIG_FILE="\$DIR/../share/fontconfig/conf/fonts.conf"
+          mkdir -p ~/.config/rio
+          cp "\$DIR/../config/config.toml" ~/.config/rio/config.toml
           "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" "\$@"
           EOF
           chmod +x rio
