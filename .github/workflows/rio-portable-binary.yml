@@ -23,7 +23,8 @@ jobs:
             git wget patchelf \
             rustc cargo \
             libxkbcommon-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
-            libx11-dev libxcb1-dev libxkbcommon-x11-dev libwayland-dev
+            libx11-dev libxcb1-dev libxkbcommon-x11-dev libwayland-dev \
+            libfontconfig-dev
 
       - name: Download Rio Terminal source
         run: |
@@ -53,6 +54,7 @@ jobs:
             echo "Copying $lib"
             cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy $lib"; exit 1; }
           done
+          cp -v /usr/lib/x86_64-linux-gnu/libfontconfig.so.1 usr/lib/ || { echo "Error: Failed to copy libfontconfig"; exit 1; }
           cp -v /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 usr/lib/ || { echo "Error: Failed to copy linker"; exit 1; }
           echo "Final library list in usr/lib:"
           ls -l usr/lib/
