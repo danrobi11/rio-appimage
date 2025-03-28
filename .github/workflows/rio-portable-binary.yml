@@ -59,14 +59,21 @@ jobs:
           echo "Final library list in usr/lib:"
           ls -l usr/lib/
 
-      - name: Bundle font files
+      - name: Bundle font files and fontconfig config
         run: |
           mkdir -p ~/rio-install/usr/share/fonts/truetype/dejavu
           cp -v /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf ~/rio-install/usr/share/fonts/truetype/dejavu/
-          # Generate fontconfig cache
+          mkdir -p ~/rio-install/usr/share/fontconfig/conf
+          cat > ~/rio-install/usr/share/fontconfig/conf/fonts.conf << EOF
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+          <fontconfig>
+            <dir>../fonts</dir>
+            <cachedir>../cache</cachedir>
+          </fontconfig>
+          EOF
           mkdir -p ~/rio-install/usr/share/fontconfig/cache
-          export FONTCONFIG_PATH=~/rio-install/usr/share/fontconfig
-          export FONTCONFIG_FILE=/etc/fonts/fonts.conf
+          export FONTCONFIG_FILE=~/rio-install/usr/share/fontconfig/conf/fonts.conf
           fc-cache -fv ~/rio-install/usr/share/fonts
 
       - name: Ensure RPATH with patchelf
@@ -99,8 +106,7 @@ jobs:
           cat > rio << EOF
           #!/bin/bash
           DIR="\$(dirname "\$(realpath "\$0")")"
-          export FONTCONFIG_PATH="\$DIR/../share/fontconfig"
-          export FONTCONFIG_FILE=/etc/fonts/fonts.conf
+          export FONTCONFIG_FILE="\$DIR/../share/fontconfig/conf/fonts.conf"
           "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" "\$@"
           EOF
           chmod +x rio
