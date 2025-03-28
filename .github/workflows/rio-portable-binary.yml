@@ -52,9 +52,9 @@ jobs:
       - name: Patch grid storage to prevent capacity overflow
         run: |
           cd ~/rio-build/rio-0.2.11
-          # Add bounds check before allocation (line 72 is in new())
-          sed -i '/pub fn new(/a let max_cols = std::cmp::min(cols, 1024); let max_rows = std::cmp::min(rows, 1024);' rio-backend/src/crosswords/grid/storage.rs || true
-          sed -i 's|Vec::with_capacity(cols \* rows)|Vec::with_capacity(max_cols * max_rows)|' rio-backend/src/crosswords/grid/storage.rs || true
+          # Cap grid size explicitly in Storage::new()
+          sed -i 's|pub fn new(cols: usize, rows: usize)|pub fn new(cols: usize, rows: usize) -> Self { let cols = cols.min(1024); let rows = rows.min(1024);|' rio-backend/src/crosswords/grid/storage.rs || true
+          sed -i 's|Vec::with_capacity(cols \* rows)|Vec::with_capacity(cols * rows)|' rio-backend/src/crosswords/grid/storage.rs || true
           echo "Patched grid storage to cap at 1024x1024"
 
       - name: Build Rio Terminal
@@ -89,8 +89,8 @@ jobs:
           <?xml version="1.0"?>
           <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
           <fontconfig>
-            <dir prefix="relative">share/fonts</dir>
-            <cachedir prefix="relative">cache</cachedir>
+            <dir prefix="relative">../share/fonts</dir>
+            <cachedir prefix="relative">../cache</cachedir>
           </fontconfig>
           EOF
           mkdir -p usr/cache
