@@ -33,6 +33,37 @@ jobs:
           wget "https://github.com/raphamorim/rio/archive/refs/tags/v0.2.11.tar.gz" -O rio-0.2.11.tar.gz
           tar -xzf rio-0.2.11.tar.gz
 
+      - name: Patch sugarloaf and tabs for font fallback and black UI
+        run: |
+          cd ~/rio-build/rio-0.2.11
+          cat << 'EOF' > font-and-tabs.patch
+          --- a/sugarloaf/src/font/mod.rs
+          +++ b/sugarloaf/src/font/mod.rs
+          @@ -562,7 +562,12 @@ impl FontLibrary {
+                   let font = self.fonts.iter().find(|f| {
+                       f.family_name().to_lowercase() == family.to_lowercase()
+                   });
+          -        let font = font.unwrap();
+          +        let font = font.unwrap_or_else(|| {
+          +            eprintln!("Warning: Font '{}' not found, using fallback", family);
+          +            self.fonts.iter()
+          +                .find(|f| f.family_name().to_lowercase() == "dejavu sans mono")
+          +                .expect("Fallback font 'DejaVu Sans Mono' not available")
+          +        });
+                   Ok(font)
+               } else {
+                   Err(FontError::FontNotFound(family.to_string()))
+          --- a/src/screen/tabs.rs
+          +++ b/src/screen/tabs.rs
+          @@ -45,7 +45,7 @@ impl Tabs {
+           fn default_background() -> Color {
+          -    Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 } // Gray default
+          +    Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 } // Force black
+           }
+          EOF
+          patch -p1 < font-and-tabs.patch || { echo "Patch failed"; exit 1; }
+          echo "Applied patches to sugarloaf/src/font/mod.rs and src/screen/tabs.rs"
+
       - name: Build Rio Terminal
         run: |
           cd ~/rio-build/rio-0.2.11
@@ -92,7 +123,7 @@ jobs:
           foreground = "#00FFFF"
           cursor = "#00FF00"
           tabs = "#000000"
-          tabs-active = "#000000"
+          tabs-active = "#00FF00"
           selection-foreground = "#00FFFF"
           selection-background = "#000000"
           black = "#000000"
