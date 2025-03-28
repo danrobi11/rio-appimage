@@ -33,12 +33,6 @@ jobs:
           wget "https://github.com/raphamorim/rio/archive/refs/tags/v0.2.11.tar.gz" -O rio-0.2.11.tar.gz
           tar -xzf rio-0.2.11.tar.gz
 
-      - name: Apply patch for portable config loading
-        run: |
-          cd ~/rio-build/rio-0.2.11
-          echo "Applying patch to load config.toml from binary directory..."
-          patch -p1 < $GITHUB_WORKSPACE/portable-config.patch || { echo "Patch failed"; exit 1; }
-
       - name: Build Rio Terminal
         run: |
           cd ~/rio-build/rio-0.2.11
