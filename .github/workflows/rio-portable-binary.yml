@@ -68,8 +68,8 @@ jobs:
           <?xml version="1.0"?>
           <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
           <fontconfig>
-            <dir>../fonts</dir>
-            <cachedir>../cache</cachedir>
+            <dir prefix="cwd">../fonts</dir>
+            <cachedir prefix="cwd">../cache</cachedir>
           </fontconfig>
           EOF
           mkdir -p ~/rio-install/usr/share/fontconfig/cache
