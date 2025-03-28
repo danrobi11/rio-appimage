@@ -130,6 +130,7 @@ jobs:
           CONFIG="\$DIR/../config/config.toml"
           mkdir -p ~/.config/rio
           cp "\$CONFIG" ~/.config/rio/config.toml || { echo "Failed to copy config"; exit 1; }
+          chmod 644 ~/.config/rio/config.toml
           echo "Using config: ~/.config/rio/config.toml"
           cat ~/.config/rio/config.toml
           "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" "\$@"
