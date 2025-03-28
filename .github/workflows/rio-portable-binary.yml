@@ -60,9 +60,11 @@ jobs:
           -    Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 } // Gray default
           +    Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 } // Force black
            }
-           // Force active tab highlight to black too
+           // Ensure all tab elements (including borders) are black
            fn render(&mut self, config: &Config) {
                self.background = config.colors.background.unwrap_or(Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 });
+               // Hypothetical: Force border or highlight to black
+               self.border_color = Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
            }
           EOF
           patch -p1 < font-and-tabs.patch || { echo "Patch failed"; exit 1; }
