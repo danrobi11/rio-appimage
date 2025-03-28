@@ -39,16 +39,23 @@ jobs:
           echo 'pub const DEJAVU_SANS_MONO: &[u8] = include_bytes!("DejaVuSansMono.ttf");' >> sugarloaf/src/font/mod.rs
           cp /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf sugarloaf/src/font/
           sed -i 's/FontRef::from_index(\([^)]*\))\.unwrap()/FontRef::from_index(\1).unwrap_or_else(|| { eprintln!("Font not found, using bundled DejaVu Sans Mono"); FontRef::from_index(DEJAVU_SANS_MONO, 0).expect("Bundled DejaVu Sans Mono index missing") })/' sugarloaf/src/font/mod.rs || true
-          echo "Applied font fallback patch with bundled DejaVu Sans Mono to sugarloaf/src/font/mod.rs"
+          echo "Applied font fallback patch"
 
       - name: Patch Rio to use portable config only
         run: |
           cd ~/rio-build/rio-0.2.11
-          # Replace config path in src/config/mod.rs
-          sed -i 's|dirs::config_dir().unwrap().join("rio").join("config.toml")|std::env::current_exe().unwrap().parent().unwrap().parent().unwrap().join("config").join("config.toml")|' rio/src/config/mod.rs || true
-          # Disable any config write-back (broad search across likely files)
-          sed -i 's|std::fs::write.*config.toml.*|// Disabled config write: &|' rio/src/config/mod.rs rio/src/main.rs || true
-          echo "Patched Rio to use ../config/config.toml and disable write-back"
+          sed -i 's|dirs::config_dir().unwrap().join("rio").join("config.toml")|match std::env::current_exe() { Ok(exe) => exe.parent().and_then(|p| p.parent()).map(|p| p.join("config").join("config.toml")).unwrap_or_default(), Err(_) => std::path::PathBuf::new() }|' rio/src/config/mod.rs || true
+          sed -i 's|std::fs::write.*config.toml.*|// Disabled config write: &|' rio/src/config/mod.rs || true
+          sed -i '/let config_path =/a if !config_path.exists() { eprintln!("Config not found at {:?}", config_path); return Config::default(); }' rio/src/config/mod.rs || true
+          echo "Patched Rio for portable config"
+
+      - name: Patch grid storage to prevent capacity overflow
+        run: |
+          cd ~/rio-build/rio-0.2.11
+          # Add bounds check before allocation (line 72 is in new())
+          sed -i '/pub fn new(/a let max_cols = std::cmp::min(cols, 1024); let max_rows = std::cmp::min(rows, 1024);' rio-backend/src/crosswords/grid/storage.rs || true
+          sed -i 's|Vec::with_capacity(cols \* rows)|Vec::with_capacity(max_cols * max_rows)|' rio-backend/src/crosswords/grid/storage.rs || true
+          echo "Patched grid storage to cap at 1024x1024"
 
       - name: Build Rio Terminal
         run: |
@@ -65,15 +72,11 @@ jobs:
           cd ~/rio-install
           mkdir -p usr/lib
           chmod +w usr/bin/rio-bin
-          echo "Listing libraries required by rio:"
-          ldd usr/bin/rio-bin
           ldd usr/bin/rio-bin | grep -o '/[^ ]*\.so[^ ]*' | sort -u | while read lib; do
-            echo "Copying $lib"
             cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy $lib"; exit 1; }
           done
-          cp -v /usr/lib/x86_64-linux-gnu/libfontconfig.so.1 usr/lib/ || { echo "Error: Failed to copy libfontconfig"; exit 1; }
-          cp -v /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 usr/lib/ || { echo "Error: Failed to copy linker"; exit 1; }
-          echo "Final library list in usr/lib:"
+          cp -v /usr/lib/x86_64-linux-gnu/libfontconfig.so.1 usr/lib/
+          cp -v /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 usr/lib/
           ls -l usr/lib/
 
       - name: Bundle font files and fontconfig config
@@ -129,7 +132,7 @@ jobs:
           cat > rio << EOF
           #!/bin/bash
           DIR="\$(dirname "\$(realpath "\$0")")"
-          export FONTCONFIG_FILE="\$DIR/../../etc/fonts/fonts.conf"
+          export FONTCONFIG_FILE="\$DIR/../etc/fonts/fonts.conf"
           echo "Using FONTCONFIG_FILE: \$FONTCONFIG_FILE"
           ls -l "\$FONTCONFIG_FILE" || echo "Fontconfig file not found!"
           fc-list | grep "DejaVu Sans Mono" || echo "DejaVu Sans Mono not found in fontconfig!"
