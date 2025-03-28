@@ -1,0 +1,91 @@
+name: Build Rio Terminal Portable Binary
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build tools and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential curl tar pkg-config zip \
+            git wget patchelf \
+            rustc cargo \
+            libxkbcommon-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
+            libx11-dev libxcb1-dev libxkbcommon-x11-dev libwayland-dev
+
+      - name: Download Rio Terminal source
+        run: |
+          mkdir -p ~/rio-build
+          cd ~/rio-build
+          wget "https://github.com/raphamorim/rio/archive/refs/tags/v0.1.12.tar.gz" -O rio-0.1.12.tar.gz
+          tar -xzf rio-0.1.12.tar.gz
+
+      - name: Build Rio Terminal
+        run: |
+          cd ~/rio-build/rio-0.1.12
+          cargo build --release
+
+      - name: Install Rio to staging directory
+        run: |
+          mkdir -p ~/rio-install/usr/bin
+          cp ~/rio-build/rio-0.1.12/target/release/rio ~/rio-install/usr/bin/rio-bin
+
+      - name: Bundle all shared library dependencies
+        run: |
+          cd ~/rio-install
+          mkdir -p usr/lib
+          chmod +w usr/bin/rio-bin
+          echo "Listing libraries required by rio:"
+          ldd usr/bin/rio-bin
+          ldd usr/bin/rio-bin | grep -o '/[^ ]*\.so[^ ]*' | sort -u | while read lib; do
+            echo "Copying $lib"
+            cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy $lib"; exit 1; }
+          done
+          cp -v /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 usr/lib/ || { echo "Error: Failed to copy linker"; exit 1; }
+          echo "Final library list in usr/lib:"
+          ls -l usr/lib/
+
+      - name: Ensure RPATH with patchelf
+        run: |
+          patchelf --force-rpath --set-rpath \$ORIGIN/../lib ~/rio-install/usr/bin/rio-bin
+
+      - name: Create launcher script
+        run: |
+          cd ~/rio-install/usr/bin
+          cat > rio << EOF
+          #!/bin/bash
+          DIR="\$(dirname "\$(realpath "\$0")")"
+          "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" "\$@"
+          EOF
+          chmod +x rio
+          cat rio
+
+      - name: Create zip file with binary and libraries
+        run: |
+          cd ~/rio-install
+          zip -r ~/rio-0.1.12-portable.zip .
+
+      - name: Generate SHA256 checksum
+        run: |
+          sha256sum ~/rio-0.1.12-portable.zip > ~/rio-0.1.12-portable.zip.sha256
+          cat ~/rio-0.1.12-portable.zip.sha256
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rio-portable
+          path: |
+            ~/rio-0.1.12-portable.zip
+            ~/rio-0.1.12-portable.zip.sha256
