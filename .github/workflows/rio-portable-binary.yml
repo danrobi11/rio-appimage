@@ -89,7 +89,7 @@ jobs:
       - name: Ensure RPATH with patchelf
         run: |
           cd ~/rio-install
-          patchelf --force-rpath --set-rpath \$ORIGIN/../lib ~/usr/bin/rio-bin
+          patchelf --force-rpath --set-rpath \$ORIGIN/../lib usr/bin/rio-bin
 
       - name: Create configuration file with font specification
         run: |
