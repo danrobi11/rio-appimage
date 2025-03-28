@@ -33,16 +33,22 @@ jobs:
           wget "https://github.com/raphamorim/rio/archive/refs/tags/v0.2.11.tar.gz" -O rio-0.2.11.tar.gz
           tar -xzf rio-0.2.11.tar.gz
 
-      - name: Patch sugarloaf for font fallback and bundle DejaVu Sans Mono
+      - name: Patch sugarloaf for font fallback
         run: |
           cd ~/rio-build/rio-0.2.11
-          # Add DejaVu Sans Mono as a constant in the module
           echo 'pub const DEJAVU_SANS_MONO: &[u8] = include_bytes!("DejaVuSansMono.ttf");' >> sugarloaf/src/font/mod.rs
-          # Copy the font file into the source directory
           cp /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf sugarloaf/src/font/
-          # Patch FontRef::from_index .unwrap() calls to use bundled DejaVu Sans Mono as fallback
           sed -i 's/FontRef::from_index(\([^)]*\))\.unwrap()/FontRef::from_index(\1).unwrap_or_else(|| { eprintln!("Font not found, using bundled DejaVu Sans Mono"); FontRef::from_index(DEJAVU_SANS_MONO, 0).expect("Bundled DejaVu Sans Mono index missing") })/' sugarloaf/src/font/mod.rs || true
           echo "Applied font fallback patch with bundled DejaVu Sans Mono to sugarloaf/src/font/mod.rs"
+
+      - name: Patch Rio to use portable config only
+        run: |
+          cd ~/rio-build/rio-0.2.11
+          # Replace config path in src/config/mod.rs
+          sed -i 's|dirs::config_dir().unwrap().join("rio").join("config.toml")|std::env::current_exe().unwrap().parent().unwrap().parent().unwrap().join("config").join("config.toml")|' rio/src/config/mod.rs || true
+          # Disable any config write-back (broad search across likely files)
+          sed -i 's|std::fs::write.*config.toml.*|// Disabled config write: &|' rio/src/config/mod.rs rio/src/main.rs || true
+          echo "Patched Rio to use ../config/config.toml and disable write-back"
 
       - name: Build Rio Terminal
         run: |
@@ -101,6 +107,9 @@ jobs:
           use-fork = false
           [fonts]
           regular = { family = "DejaVu Sans Mono", style = "Normal" }
+          [cursor]
+          shape = "block"
+          blinking = false
           [colors]
           background = "#000000"
           foreground = "#00FFFF"
@@ -124,9 +133,13 @@ jobs:
           echo "Using FONTCONFIG_FILE: \$FONTCONFIG_FILE"
           ls -l "\$FONTCONFIG_FILE" || echo "Fontconfig file not found!"
           fc-list | grep "DejaVu Sans Mono" || echo "DejaVu Sans Mono not found in fontconfig!"
-          mkdir -p ~/.config/rio
-          cp "\$DIR/../config/config.toml" ~/.config/rio/config.toml || { echo "Failed to copy config.toml from \$DIR/../config/config.toml"; exit 1; }
+          CONFIG="\$DIR/../config/config.toml"
+          echo "Using config: \$CONFIG"
+          cat "\$CONFIG"
           "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" "\$@"
+          echo "Rio closed. Checking ~/.config/rio/:"
+          ls -ld ~/.config/rio/ 2>/dev/null || echo "No ~/.config/rio/ created"
+          ls -l ~/.config/rio/config.toml 2>/dev/null || echo "No config.toml in ~/.config/rio/"
           EOF
           chmod +x rio
           cat rio
