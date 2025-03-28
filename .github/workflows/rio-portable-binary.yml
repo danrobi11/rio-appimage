@@ -24,7 +24,7 @@ jobs:
             rustc cargo \
             libxkbcommon-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
             libx11-dev libxcb1-dev libxkbcommon-x11-dev libwayland-dev \
-            libfontconfig-dev
+            libfontconfig-dev fonts-dejavu-core
 
       - name: Download Rio Terminal v0.2.11 source
         run: |
@@ -59,15 +59,27 @@ jobs:
           echo "Final library list in usr/lib:"
           ls -l usr/lib/
 
+      - name: Bundle font files
+        run: |
+          mkdir -p ~/rio-install/usr/share/fonts/truetype/dejavu
+          cp -v /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf ~/rio-install/usr/share/fonts/truetype/dejavu/
+          # Generate fontconfig cache
+          mkdir -p ~/rio-install/usr/share/fontconfig/cache
+          export FONTCONFIG_PATH=~/rio-install/usr/share/fontconfig
+          export FONTCONFIG_FILE=/etc/fonts/fonts.conf
+          fc-cache -fv ~/rio-install/usr/share/fonts
+
       - name: Ensure RPATH with patchelf
         run: |
           patchelf --force-rpath --set-rpath \$ORIGIN/../lib ~/rio-install/usr/bin/rio-bin
 
-      - name: Create configuration file
+      - name: Create configuration file with font specification
         run: |
           mkdir -p ~/rio-install/usr/config
           cat > ~/rio-install/usr/config/config.toml << EOF
           use-fork = false
+          [fonts]
+          regular = { family = "DejaVu Sans Mono", style = "Normal" }
           [colors]
           background = "#000000"
           foreground = "#00FFFF"
@@ -81,12 +93,14 @@ jobs:
           chmod 644 ~/rio-install/usr/config/config.toml
           cat ~/rio-install/usr/config/config.toml
 
-      - name: Create launcher script
+      - name: Create launcher script with fontconfig env
         run: |
           cd ~/rio-install/usr/bin
           cat > rio << EOF
           #!/bin/bash
           DIR="\$(dirname "\$(realpath "\$0")")"
+          export FONTCONFIG_PATH="\$DIR/../share/fontconfig"
+          export FONTCONFIG_FILE=/etc/fonts/fonts.conf
           "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" "\$@"
           EOF
           chmod +x rio
