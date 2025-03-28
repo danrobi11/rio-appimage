@@ -36,9 +36,8 @@ jobs:
       - name: Patch sugarloaf for font fallback
         run: |
           cd ~/rio-build/rio-0.2.11
-          # Patch font fallback in methods with self
-          sed -i 's/\.unwrap()/\.unwrap_or_else(|_| { eprintln!("Font not found, using DejaVu Sans Mono"); FontData::from_slice(FONT_DEJAVU_SANS_MONO, false).expect("Fallback font missing") })/' sugarloaf/src/font/mod.rs || true
-          # Skip tabs patch for now until we confirm location
+          # Replace .unwrap() with a simple logging fallback, no specific font yet
+          sed -i 's/\.unwrap()/\.unwrap_or_else(|| { eprintln!("Font not found, using system default"); FontData::default() })/' sugarloaf/src/font/mod.rs || true
           echo "Applied font fallback patch to sugarloaf/src/font/mod.rs"
 
       - name: Build Rio Terminal
