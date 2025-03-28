@@ -97,7 +97,8 @@ jobs:
         run: |
           cd ~/rio-install
           mkdir -p usr/config
-          cat > usr/config/config.toml << EOF
+          rm -f usr/config/config.toml
+          cat > usr/config/config.toml << 'EOF'
           use-fork = false
           [fonts]
           regular = { family = "DejaVu Sans Mono", style = "Normal" }
@@ -115,6 +116,7 @@ jobs:
           black = "#000000"
           EOF
           chmod 644 usr/config/config.toml
+          echo "Config contents after creation:"
           cat usr/config/config.toml
 
       - name: Create launcher script
