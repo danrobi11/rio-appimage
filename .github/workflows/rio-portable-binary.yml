@@ -39,7 +39,7 @@ jobs:
           # Patch FontData::from_slice .unwrap() calls (Result)
           sed -i 's/FontData::from_slice(\([^)]*\))\.unwrap()/FontData::from_slice(\1).unwrap_or_else(|_| { eprintln!("Font not found, using emoji fallback"); FontData::from_slice(FONT_TWEMOJI_EMOJI, true).expect("Emoji fallback missing") })/' sugarloaf/src/font/mod.rs || true
           # Patch FontRef::from_index .unwrap() calls (Option)
-          sed -i 's/FontRef::from_index(\([^)]*\))\.unwrap()/FontRef::from_index(\1).unwrap_or_else(|| { eprintln!("Font not found, using emoji fallback"); FontRef::from_index(FontData::from_slice(FONT_TWEMOJI_EMOJI, true).expect("Emoji data missing"), 0).expect("Emoji index missing") })/' sugarloaf/src/font/mod.rs || true
+          sed -i 's/FontRef::from_index(\([^)]*\))\.unwrap()/FontRef::from_index(\1).unwrap_or_else(|| { eprintln!("Font not found, using emoji fallback"); FontRef::from_index(FONT_TWEMOJI_EMOJI, 0).expect("Emoji index missing") })/' sugarloaf/src/font/mod.rs || true
           echo "Applied font fallback patches to sugarloaf/src/font/mod.rs"
 
       - name: Build Rio Terminal
