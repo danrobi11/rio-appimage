@@ -1,4 +1,4 @@
-# Unofficial Rio AppImage
+# Unofficial Rio Terminal AppImage
 
 ![rio-logo](https://github.com/danrobi11/rio-appimage/blob/main/rio-resized.png)
 
@@ -68,7 +68,7 @@ Notes
 Source: https://github.com/raphamorim/rio/archive/refs/tags/v0.1.12.tar.gz.
 Runtime: Libraries bundled for portability.
 ```
-# Portable Binary:
+# Unofficial Rio Terminal Portable Binary:
 
 ### Dynamic Executable with Bundled Libraries
 
