@@ -1,4 +1,3 @@
-yaml
 name: Build Rio Terminal Portable Binary
 
 on:
@@ -184,4 +183,3 @@ jobs:
           path: |
             ~/rio-0.2.11-portable.zip
             ~/rio-0.2.11-portable.zip.sha256
-            
