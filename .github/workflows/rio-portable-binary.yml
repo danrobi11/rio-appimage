@@ -66,7 +66,6 @@ jobs:
           ldd usr/bin/rio-bin | grep -o '/[^ ]*\.so[^ ]*' | sort -u | while read lib; do
             cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy $lib"; exit 1; }
           done
-          # Explicitly include libxkbcommon-x11.so and other required libraries
           cp -v /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0 usr/lib/ || { echo "Error: Failed to copy libxkbcommon-x11.so.0"; exit 1; }
           cp -v /usr/lib/x86_64-linux-gnu/libfontconfig.so.1 usr/lib/
           cp -v /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 usr/lib/
@@ -78,7 +77,7 @@ jobs:
           mkdir -p usr/share/fonts/truetype/dejavu
           cp -v /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf usr/share/fonts/truetype/dejavu/
           mkdir -p usr/etc/fonts
-          cat > usr/etc/fonts/fonts.conf << EOF
+          cat > usr/etc/fonts/fonts.conf << 'EOF'
 <?xml version="1.0"?>
 <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
 <fontconfig>
@@ -126,21 +125,21 @@ EOF
       - name: Create launcher script
         run: |
           cd ~/rio-install/usr/bin
-          cat > rio << EOF
+          cat > rio << 'EOF'
 #!/bin/bash
-DIR="\$(dirname "\$(realpath "\$0")")"
-export FONTCONFIG_FILE="\$DIR/../etc/fonts/fonts.conf"
-export FONTCONFIG_PATH="\$DIR/../etc/fonts"
-echo "Using FONTCONFIG_FILE: \$FONTCONFIG_FILE"
-ls -l "\$FONTCONFIG_FILE" || echo "Fontconfig file not found!"
+DIR="$(dirname "$(realpath "$0")")"
+export FONTCONFIG_FILE="$DIR/../etc/fonts/fonts.conf"
+export FONTCONFIG_PATH="$DIR/../etc/fonts"
+echo "Using FONTCONFIG_FILE: $FONTCONFIG_FILE"
+ls -l "$FONTCONFIG_FILE" || echo "Fontconfig file not found!"
 fc-list | grep "DejaVu Sans Mono" || echo "DejaVu Sans Mono not found in fontconfig!"
-CONFIG="\$DIR/../config/config.toml"
+CONFIG="$DIR/../config/config.toml"
 mkdir -p ~/.config/rio
-cp "\$CONFIG" ~/.config/rio/config.toml || { echo "Failed to copy config"; exit 1; }
+cp "$CONFIG" ~/.config/rio/config.toml || { echo "Failed to copy config"; exit 1; }
 chmod 644 ~/.config/rio/config.toml
 echo "Using config: ~/.config/rio/config.toml"
 cat ~/.config/rio/config.toml
-"\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" "\$@"
+"$DIR/../lib/ld-linux-x86-64.so.2" --library-path "$DIR/../lib" "$DIR/rio-bin" "$@"
 echo "Rio closed. Checking ~/.config/rio/:"
 ls -ld ~/.config/rio/
 ls -l ~/.config/rio/config.toml
