@@ -68,7 +68,9 @@ jobs:
             cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy $lib"; exit 1; }
           done
           # Explicitly copy additional libraries and their dependencies
-          for lib in /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0 /usr/lib/x86_64-linux-gnu/libxkbcommon.so.0 /usr/lib/x86_64-linux-gnu/libfontconfig.so.1 /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2; do
+          for lib in /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0 /usr/lib/x86_64-linux-gnu/libxkbcommon.so.0 \
+                     /usr/lib/x86_64-linux-gnu/libfontconfig.so.1 /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 \
+                     /usr/lib/x86_64-linux-gnu/libEGL.so.1 /usr/lib/x86_64-linux-gnu/libGLESv2.so.2; do
             if [ -f "$lib" ]; then
               cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy $lib"; exit 1; }
             else
@@ -76,21 +78,28 @@ jobs:
               exit 1
             fi
           done
-          # Copy symbolic links for libxkbcommon-x11.so if they exist
-          if [ -f /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so ]; then
-            cp -v /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so usr/lib/ || { echo "Error: Failed to copy libxkbcommon-x11.so"; exit 1; }
-          fi
-          # Copy dependencies of libxkbcommon-x11.so.0
-          ldd usr/lib/libxkbcommon-x11.so.0 | grep -o '/[^ ]*\.so[^ ]*' | sort -u | while read lib; do
-            cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy dependency $lib"; exit 1; }
+          # Copy symbolic links for libxkbcommon-x11.so and graphics libraries
+          for link in /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so /usr/lib/x86_64-linux-gnu/libEGL.so \
+                      /usr/lib/x86_64-linux-gnu/libGLESv2.so; do
+            if [ -f "$link" ]; then
+              cp -v "$link" usr/lib/ || { echo "Error: Failed to copy $link"; exit 1; }
+            fi
           done
-          # Verify that libxkbcommon-x11.so.0 is present
-          if [ -f usr/lib/libxkbcommon-x11.so.0 ]; then
-            echo "Successfully copied libxkbcommon-x11.so.0"
-          else
-            echo "Error: libxkbcommon-x11.so.0 not found in usr/lib/"
-            exit 1
-          fi
+          # Copy dependencies of libxkbcommon-x11.so.0, libEGL.so.1, and libGLESv2.so.2
+          for lib in usr/lib/libxkbcommon-x11.so.0 usr/lib/libEGL.so.1 usr/lib/libGLESv2.so.2; do
+            ldd "$lib" | grep -o '/[^ ]*\.so[^ ]*' | sort -u | while read dep; do
+              cp -v "$dep" usr/lib/ || { echo "Error: Failed to copy dependency $dep"; exit 1; }
+            done
+          done
+          # Verify that critical libraries are present
+          for lib in libxkbcommon-x11.so.0 libxkbcommon.so.0 libEGL.so.1 libGLESv2.so.2; do
+            if [ -f "usr/lib/$lib" ]; then
+              echo "Successfully copied $lib"
+            else
+              echo "Error: $lib not found in usr/lib/"
+              exit 1
+            fi
+          done
           # List contents of usr/lib for debugging
           ls -l usr/lib/
 
@@ -104,13 +113,15 @@ jobs:
           <?xml version="1.0"?>
           <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
           <fontconfig>
-            <dir>$PWD/usr/share/fonts</dir>
-            <cachedir>$PWD/usr/cache</cachedir>
+            <dir>./share/fonts</dir>
+            <cachedir>./cache</cachedir>
           </fontconfig>
           EOF
           mkdir -p usr/cache
           export FONTCONFIG_FILE=$PWD/usr/etc/fonts/fonts.conf
           fc-cache -fv $PWD/usr/share/fonts
+          # Verify font cache
+          fc-list | grep "DejaVu Sans Mono" || echo "Warning: DejaVu Sans Mono not found in font cache"
 
       - name: Ensure RPATH with patchelf
         run: |
@@ -155,7 +166,7 @@ jobs:
           cd ~/rio-install/usr/bin
           cat > rio << EOF
           #!/bin/bash
-          DIR="\$(dirname "\$(realpath "\$0")")"
+          DIR="\$(dirname "\$(realpath "\$0)")"
           export FONTCONFIG_FILE="\$DIR/../etc/fonts/fonts.conf"
           echo "Using FONTCONFIG_FILE: \$FONTCONFIG_FILE"
           ls -l "\$FONTCONFIG_FILE" || echo "Fontconfig file not found!"
@@ -169,20 +180,26 @@ jobs:
           # Debug: List libraries in usr/lib
           echo "Listing libraries in \$DIR/../lib:"
           ls -l "\$DIR/../lib/"
-          # Debug: Verify libxkbcommon-x11.so.0
-          if [ -f "\$DIR/../lib/libxkbcommon-x11.so.0" ]; then
-            echo "Found libxkbcommon-x11.so.0"
-          else
-            echo "Error: libxkbcommon-x11.so.0 not found in \$DIR/../lib/"
-            exit 1
-          fi
+          # Debug: Verify critical libraries
+          for lib in libxkbcommon-x11.so.0 libEGL.so.1 libGLESv2.so.2; do
+            if [ -f "\$DIR/../lib/\$lib" ]; then
+              echo "Found \$lib"
+            else
+              echo "Error: \$lib not found in \$DIR/../lib/"
+              exit 1
+            fi
+          done
           # Debug: Check ldd output for rio-bin
           echo "Checking ldd for rio-bin:"
           ldd "\$DIR/rio-bin" || echo "ldd failed"
+          # Debug: Enable GL debugging
+          export LIBGL_DEBUG=verbose
           # Set LD_LIBRARY_PATH as fallback
           export LD_LIBRARY_PATH="\$DIR/../lib:\$LD_LIBRARY_PATH"
           echo "Using LD_LIBRARY_PATH: \$LD_LIBRARY_PATH"
           "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" "\$@"
+          # Unset LD_LIBRARY_PATH for post-execution commands to avoid glibc issues
+          unset LD_LIBRARY_PATH
           echo "Rio closed. Checking ~/.config/rio/:"
           ls -ld ~/.config/rio/
           ls -l ~/.config/rio/config.toml
