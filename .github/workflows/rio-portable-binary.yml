@@ -77,7 +77,12 @@ jobs:
           mkdir -p usr/share/fonts/truetype/dejavu
           cp -v /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf usr/share/fonts/truetype/dejavu/
           mkdir -p usr/etc/fonts
-          echo '<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n<fontconfig>\n  <dir>./usr/share/fonts</dir>\n  <cachedir>./usr/cache</cachedir>\n</fontconfig>' > usr/etc/fonts/fonts.conf
+          echo '<?xml version="1.0"?>' > usr/etc/fonts/fonts.conf
+          echo '<!DOCTYPE fontconfig SYSTEM "fonts.dtd">' >> usr/etc/fonts/fonts.conf
+          echo '<fontconfig>' >> usr/etc/fonts/fonts.conf
+          echo '  <dir>./usr/share/fonts</dir>' >> usr/etc/fonts/fonts.conf
+          echo '  <cachedir>./usr/cache</cachedir>' >> usr/etc/fonts/fonts.conf
+          echo '</fontconfig>' >> usr/etc/fonts/fonts.conf
           mkdir -p usr/cache
           export FONTCONFIG_FILE=$PWD/usr/etc/fonts/fonts.conf
           export FONTCONFIG_PATH=$PWD/usr/etc/fonts
