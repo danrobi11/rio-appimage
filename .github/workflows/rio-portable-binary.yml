@@ -1,3 +1,4 @@
+```yaml
 name: Build Rio Terminal Portable Binary
 
 on:
@@ -23,7 +24,7 @@ jobs:
             git wget patchelf \
             rustc cargo \
             libxkbcommon-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
-            libx11-dev libxcb1-dev libxkbcommon-x11-dev libwayland-dev \
+            libx11-dev libxcb1-dev libxkbcommon-x11-dev libxkbcommon-x11-0 libwayland-dev \
             libfontconfig-dev fonts-dejavu-core
 
       - name: Download Rio Terminal v0.2.11 source
@@ -63,12 +64,27 @@ jobs:
           cd ~/rio-install
           mkdir -p usr/lib
           chmod +w usr/bin/rio-bin
+          # Copy libraries identified by ldd
           ldd usr/bin/rio-bin | grep -o '/[^ ]*\.so[^ ]*' | sort -u | while read lib; do
             cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy $lib"; exit 1; }
           done
-          cp -v /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0 usr/lib/ || { echo "Error: Failed to copy libxkbcommon-x11.so.0"; exit 1; }
-          cp -v /usr/lib/x86_64-linux-gnu/libfontconfig.so.1 usr/lib/
-          cp -v /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 usr/lib/
+          # Explicitly copy additional libraries that may not appear in ldd (e.g., transitive or dynamically loaded)
+          for lib in /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0 /usr/lib/x86_64-linux-gnu/libfontconfig.so.1 /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2; do
+            if [ -f "$lib" ]; then
+              cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy $lib"; exit 1; }
+            else
+              echo "Error: Library $lib not found on system"
+              exit 1
+            fi
+          done
+          # Verify that libxkbcommon-x11.so.0 is present
+          if [ -f usr/lib/libxkbcommon-x11.so.0 ]; then
+            echo "Successfully copied libxkbcommon-x11.so.0"
+          else
+            echo "Error: libxkbcommon-x11.so.0 not found in usr/lib/"
+            exit 1
+          fi
+          # List contents of usr/lib for debugging
           ls -l usr/lib/
 
       - name: Bundle font files and fontconfig config
@@ -77,22 +93,29 @@ jobs:
           mkdir -p usr/share/fonts/truetype/dejavu
           cp -v /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf usr/share/fonts/truetype/dejavu/
           mkdir -p usr/etc/fonts
-          echo '<?xml version="1.0"?>' > usr/etc/fonts/fonts.conf
-          echo '<!DOCTYPE fontconfig SYSTEM "fonts.dtd">' >> usr/etc/fonts/fonts.conf
-          echo '<fontconfig>' >> usr/etc/fonts/fonts.conf
-          echo '  <dir>./usr/share/fonts</dir>' >> usr/etc/fonts/fonts.conf
-          echo '  <cachedir>./usr/cache</cachedir>' >> usr/etc/fonts/fonts.conf
-          echo '</fontconfig>' >> usr/etc/fonts/fonts.conf
+          cat > usr/etc/fonts/fonts.conf << EOF
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+          <fontconfig>
+            <dir>/home/danrobi/Downloads/rio-portable/rio-0.2.11-portable/usr/share/fonts</dir>
+            <cachedir>/home/danrobi/Downloads/rio-portable/rio-0.2.11-portable/usr/cache</cachedir>
+          </fontconfig>
+          EOF
           mkdir -p usr/cache
           export FONTCONFIG_FILE=$PWD/usr/etc/fonts/fonts.conf
-          export FONTCONFIG_PATH=$PWD/usr/etc/fonts
-          fc-cache -fv ./usr/share/fonts
-          fc-list | grep "DejaVu Sans Mono" || { echo "Error: DejaVu Sans Mono not found in fontconfig"; exit 1; }
+          fc-cache -fv /home/danrobi/Downloads/rio-portable/rio-0.2.11-portable/usr/share/fonts
 
       - name: Ensure RPATH with patchelf
         run: |
           cd ~/rio-install
           patchelf --force-rpath --set-rpath \$ORIGIN/../lib usr/bin/rio-bin
+          # Verify RPATH
+          if patchelf --print-rpath usr/bin/rio-bin | grep -q "\$ORIGIN/../lib"; then
+            echo "RPATH successfully set to \$ORIGIN/../lib"
+          else
+            echo "Error: Failed to set RPATH"
+            exit 1
+          fi
 
       - name: Create configuration file with font specification
         run: |
@@ -100,22 +123,22 @@ jobs:
           mkdir -p usr/config
           rm -f usr/config/config.toml
           cat > usr/config/config.toml << 'EOF'
-use-fork = false
-[fonts]
-regular = { family = "DejaVu Sans Mono", style = "Normal" }
-[cursor]
-shape = "block"
-blinking = false
-[colors]
-background = "#000000"
-foreground = "#00FFFF"
-cursor = "#00FF00"
-tabs = "#000000"
-tabs-active = "#00FF00"
-selection-foreground = "#00FFFF"
-selection-background = "#000000"
-black = "#000000"
-EOF
+          use-fork = false
+          [fonts]
+          regular = { family = "DejaVu Sans Mono", style = "Normal" }
+          [cursor]
+          shape = "block"
+          blinking = false
+          [colors]
+          background = "#000000"
+          foreground = "#00FFFF"
+          cursor = "#00FF00"
+          tabs = "#000000"
+          tabs-active = "#00FF00"
+          selection-foreground = "#00FFFF"
+          selection-background = "#000000"
+          black = "#000000"
+          EOF
           chmod 644 usr/config/config.toml
           echo "Config contents after creation:"
           cat usr/config/config.toml
@@ -123,25 +146,24 @@ EOF
       - name: Create launcher script
         run: |
           cd ~/rio-install/usr/bin
-          cat > rio << 'EOF'
-#!/bin/bash
-DIR="$(dirname "$(realpath "$0")")"
-export FONTCONFIG_FILE="$DIR/../etc/fonts/fonts.conf"
-export FONTCONFIG_PATH="$DIR/../etc/fonts"
-echo "Using FONTCONFIG_FILE: $FONTCONFIG_FILE"
-ls -l "$FONTCONFIG_FILE" || echo "Fontconfig file not found!"
-fc-list | grep "DejaVu Sans Mono" || echo "DejaVu Sans Mono not found in fontconfig!"
-CONFIG="$DIR/../config/config.toml"
-mkdir -p ~/.config/rio
-cp "$CONFIG" ~/.config/rio/config.toml || { echo "Failed to copy config"; exit 1; }
-chmod 644 ~/.config/rio/config.toml
-echo "Using config: ~/.config/rio/config.toml"
-cat ~/.config/rio/config.toml
-"$DIR/../lib/ld-linux-x86-64.so.2" --library-path "$DIR/../lib" "$DIR/rio-bin" "$@"
-echo "Rio closed. Checking ~/.config/rio/:"
-ls -ld ~/.config/rio/
-ls -l ~/.config/rio/config.toml
-EOF
+          cat > rio << EOF
+          #!/bin/bash
+          DIR="\$(dirname "\$(realpath "\$0")")"
+          export FONTCONFIG_FILE="\$DIR/../etc/fonts/fonts.conf"
+          echo "Using FONTCONFIG_FILE: \$FONTCONFIG_FILE"
+          ls -l "\$FONTCONFIG_FILE" || echo "Fontconfig file not found!"
+          fc-list | grep "DejaVu Sans Mono" || echo "DejaVu Sans Mono not found in fontconfig!"
+          CONFIG="\$DIR/../config/config.toml"
+          mkdir -p ~/.config/rio
+          cp "\$CONFIG" ~/.config/rio/config.toml || { echo "Failed to copy config"; exit 1; }
+          chmod 644 ~/.config/rio/config.toml
+          echo "Using config: ~/.config/rio/config.toml"
+          cat ~/.config/rio/config.toml
+          "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" "\$@"
+          echo "Rio closed. Checking ~/.config/rio/:"
+          ls -ld ~/.config/rio/
+          ls -l ~/.config/rio/config.toml
+          EOF
           chmod +x rio
           cat rio
 
@@ -162,3 +184,4 @@ EOF
           path: |
             ~/rio-0.2.11-portable.zip
             ~/rio-0.2.11-portable.zip.sha256
+            
