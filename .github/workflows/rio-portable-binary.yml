@@ -63,18 +63,26 @@ jobs:
           cd ~/rio-install
           mkdir -p usr/lib
           chmod +w usr/bin/rio-bin
-          # Copy libraries identified by ldd
+          # Copy libraries identified by ldd for rio-bin
           ldd usr/bin/rio-bin | grep -o '/[^ ]*\.so[^ ]*' | sort -u | while read lib; do
             cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy $lib"; exit 1; }
           done
-          # Explicitly copy additional libraries that may not appear in ldd (e.g., transitive or dynamically loaded)
-          for lib in /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0 /usr/lib/x86_64-linux-gnu/libfontconfig.so.1 /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2; do
+          # Explicitly copy additional libraries and their dependencies
+          for lib in /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0 /usr/lib/x86_64-linux-gnu/libxkbcommon.so.0 /usr/lib/x86_64-linux-gnu/libfontconfig.so.1 /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2; do
             if [ -f "$lib" ]; then
               cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy $lib"; exit 1; }
             else
               echo "Error: Library $lib not found on system"
               exit 1
             fi
+          done
+          # Copy symbolic links for libxkbcommon-x11.so if they exist
+          if [ -f /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so ]; then
+            cp -v /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so usr/lib/ || { echo "Error: Failed to copy libxkbcommon-x11.so"; exit 1; }
+          fi
+          # Copy dependencies of libxkbcommon-x11.so.0
+          ldd usr/lib/libxkbcommon-x11.so.0 | grep -o '/[^ ]*\.so[^ ]*' | sort -u | while read lib; do
+            cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy dependency $lib"; exit 1; }
           done
           # Verify that libxkbcommon-x11.so.0 is present
           if [ -f usr/lib/libxkbcommon-x11.so.0 ]; then
@@ -96,13 +104,13 @@ jobs:
           <?xml version="1.0"?>
           <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
           <fontconfig>
-            <dir>/home/danrobi/Downloads/rio-portable/rio-0.2.11-portable/usr/share/fonts</dir>
-            <cachedir>/home/danrobi/Downloads/rio-portable/rio-0.2.11-portable/usr/cache</cachedir>
+            <dir>$PWD/usr/share/fonts</dir>
+            <cachedir>$PWD/usr/cache</cachedir>
           </fontconfig>
           EOF
           mkdir -p usr/cache
           export FONTCONFIG_FILE=$PWD/usr/etc/fonts/fonts.conf
-          fc-cache -fv /home/danrobi/Downloads/rio-portable/rio-0.2.11-portable/usr/share/fonts
+          fc-cache -fv $PWD/usr/share/fonts
 
       - name: Ensure RPATH with patchelf
         run: |
@@ -158,6 +166,22 @@ jobs:
           chmod 644 ~/.config/rio/config.toml
           echo "Using config: ~/.config/rio/config.toml"
           cat ~/.config/rio/config.toml
+          # Debug: List libraries in usr/lib
+          echo "Listing libraries in \$DIR/../lib:"
+          ls -l "\$DIR/../lib/"
+          # Debug: Verify libxkbcommon-x11.so.0
+          if [ -f "\$DIR/../lib/libxkbcommon-x11.so.0" ]; then
+            echo "Found libxkbcommon-x11.so.0"
+          else
+            echo "Error: libxkbcommon-x11.so.0 not found in \$DIR/../lib/"
+            exit 1
+          fi
+          # Debug: Check ldd output for rio-bin
+          echo "Checking ldd for rio-bin:"
+          ldd "\$DIR/rio-bin" || echo "ldd failed"
+          # Set LD_LIBRARY_PATH as fallback
+          export LD_LIBRARY_PATH="\$DIR/../lib:\$LD_LIBRARY_PATH"
+          echo "Using LD_LIBRARY_PATH: \$LD_LIBRARY_PATH"
           "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" "\$@"
           echo "Rio closed. Checking ~/.config/rio/:"
           ls -ld ~/.config/rio/
@@ -170,6 +194,8 @@ jobs:
         run: |
           cd ~/rio-install
           zip -r ~/rio-0.2.11-portable.zip .
+          # Debug: List contents of zip file
+          unzip -l ~/rio-0.2.11-portable.zip
 
       - name: Generate SHA256 checksum
         run: |
