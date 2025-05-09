@@ -61,6 +61,7 @@ jobs:
             cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy $lib"; exit 1; }
           done
           cp -v /usr/lib/x86_64-linux-gnu/libfontconfig.so.1 usr/lib/
+          cp -v /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0 usr/lib/
           cp -v /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 usr/lib/
           ls -l usr/lib/
       - name: Bundle font files and fontconfig config
