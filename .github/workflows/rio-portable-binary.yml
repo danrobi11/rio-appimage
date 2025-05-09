@@ -89,7 +89,6 @@ jobs:
           <?xml version="1.0"?>
           <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
           <fontconfig>
-            <dir prefix="cwd">.</dir>
             <dir prefix="cwd">../share/fonts</dir>
             <cachedir prefix="cwd">../cache</cachedir>
           </fontconfig>
@@ -133,7 +132,9 @@ jobs:
           #!/bin/bash
           DIR="\$(dirname "\$(realpath "\$0")")"
           export FONTCONFIG_FILE="\$DIR/../etc/fonts/fonts.conf"
+          export FONTCONFIG_PATH="\$DIR/../etc/fonts"
           echo "Using FONTCONFIG_FILE: \$FONTCONFIG_FILE"
+          echo "Using FONTCONFIG_PATH: \$FONTCONFIG_PATH"
           ls -l "\$DIR/../etc/fonts" || echo "Fontconfig directory not found!"
           ls -l "\$FONTCONFIG_FILE" || echo "Fontconfig file not found!"
           cat "\$FONTCONFIG_FILE" || echo "Failed to read fonts.conf"
@@ -141,7 +142,6 @@ jobs:
           chmod -R u+w "\$DIR/../cache"
           echo "Font cache directory:"
           ls -ld "\$DIR/../cache"
-          export FONTCONFIG_PATH="\$DIR/../etc/fonts"
           fc-cache -fv "\$DIR/../share/fonts" || echo "Failed to generate font cache!"
           fc-list | grep "DejaVu Sans Mono" || echo "DejaVu Sans Mono not found in fontconfig!"
           echo "Bundled libraries:"
