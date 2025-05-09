@@ -69,6 +69,8 @@ jobs:
           cp -v /usr/lib/x86_64-linux-gnu/libwayland-cursor.so.0 usr/lib/
           cp -v /usr/lib/x86_64-linux-gnu/libwayland-egl.so.1 usr/lib/
           cp -v /usr/lib/x86_64-linux-gnu/libfreetype.so.6 usr/lib/
+          cp -v /usr/lib/x86_64-linux-gnu/libEGL.so.1 usr/lib/
+          cp -v /usr/lib/x86_64-linux-gnu/libGL.so.1 usr/lib/
           cp -v /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 usr/lib/
           ls -l usr/lib/
       - name: Bundle font files and fontconfig config
@@ -126,6 +128,7 @@ jobs:
           export FONTCONFIG_FILE="\$DIR/../etc/fonts/fonts.conf"
           echo "Using FONTCONFIG_FILE: \$FONTCONFIG_FILE"
           ls -l "\$FONTCONFIG_FILE" || echo "Fontconfig file not found!"
+          fc-cache -fv "\$DIR/../share/fonts" || echo "Failed to generate font cache!"
           fc-list | grep "DejaVu Sans Mono" || echo "DejaVu Sans Mono not found in fontconfig!"
           CONFIG="\$DIR/../config/config.toml"
           mkdir -p ~/.config/rio
