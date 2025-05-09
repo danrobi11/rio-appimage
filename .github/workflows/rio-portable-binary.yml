@@ -76,7 +76,6 @@ jobs:
           cp -v /usr/lib/x86_64-linux-gnu/libXdmcp.so.6 usr/lib/
           cp -v /usr/lib/x86_64-linux-gnu/libbsd.so.0 usr/lib/
           cp -v /usr/lib/x86_64-linux-gnu/libmd.so.0 usr/lib/
-          cp -v /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 usr/lib/
           ls -l usr/lib/
       - name: Bundle font files and fontconfig config
         run: |
@@ -142,6 +141,7 @@ jobs:
           chmod -R u+w "\$DIR/../cache"
           echo "Font cache directory:"
           ls -ld "\$DIR/../cache"
+          export FONTCONFIG_PATH="\$DIR/../etc/fonts"
           fc-cache -fv "\$DIR/../share/fonts" || echo "Failed to generate font cache!"
           fc-list | grep "DejaVu Sans Mono" || echo "DejaVu Sans Mono not found in fontconfig!"
           echo "Bundled libraries:"
@@ -155,7 +155,7 @@ jobs:
           cat ~/.config/rio/config.toml
           export LD_LIBRARY_PATH="\$DIR/../lib"
           echo "LD_LIBRARY_PATH: \$LD_LIBRARY_PATH"
-          "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" "\$@"
+          "\$DIR/rio-bin" "\$@" || echo "Failed to run rio-bin"
           unset LD_LIBRARY_PATH
           echo "Rio closed. Checking ~/.config/rio/:"
           ls -ld ~/.config/rio/
