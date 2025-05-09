@@ -23,86 +23,46 @@ jobs:
             git wget patchelf \
             rustc cargo \
             libxkbcommon-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
-            libx11-dev libxcb1-dev libxkbcommon-x11-dev libxkbcommon-x11-0 libwayland-dev \
+            libx11-dev libxcb1-dev libxkbcommon-x11-dev libwayland-dev \
             libfontconfig-dev fonts-dejavu-core
-
-      - name: Download Rio Terminal v0.2.11 source
+      - name: Download Rio Terminal v0.2.15 source
         run: |
           mkdir -p ~/rio-build
           cd ~/rio-build
-          wget "https://github.com/raphamorim/rio/archive/refs/tags/v0.2.11.tar.gz" -O rio-0.2.11.tar.gz
-          tar -xzf rio-0.2.11.tar.gz
-
+          wget "https://github.com/raphamorim/rio/archive/refs/tags/v0.2.15.tar.gz" -O rio-0.2.15.tar.gz
+          tar -xzf rio-0.2.15.tar.gz
       - name: Patch sugarloaf for font fallback
         run: |
-          cd ~/rio-build/rio-0.2.11
+          cd ~/rio-build/rio-0.2.15
           echo 'pub const DEJAVU_SANS_MONO: &[u8] = include_bytes!("DejaVuSansMono.ttf");' >> sugarloaf/src/font/mod.rs
           cp /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf sugarloaf/src/font/
           sed -i 's/FontRef::from_index(\([^)]*\))\.unwrap()/FontRef::from_index(\1).unwrap_or_else(|| { eprintln!("Font not found, using bundled DejaVu Sans Mono"); FontRef::from_index(DEJAVU_SANS_MONO, 0).expect("Bundled DejaVu Sans Mono index missing") })/' sugarloaf/src/font/mod.rs || true
           echo "Applied font fallback patch"
-
       - name: Patch grid storage to prevent capacity overflow
         run: |
-          cd ~/rio-build/rio-0.2.11
+          cd ~/rio-build/rio-0.2.15
           sed -i 's|pub fn new(cols: usize, rows: usize) -> Self {|pub fn new(cols: usize, rows: usize) -> Self { let cols = cols.min(1024); let rows = rows.min(1024); let capacity = cols.checked_mul(rows).unwrap_or(1024 * 1024);|' rio-backend/src/crosswords/grid/storage.rs || true
           sed -i 's|Vec::with_capacity(cols \* rows)|Vec::with_capacity(capacity)|' rio-backend/src/crosswords/grid/storage.rs || true
           echo "Patched grid storage with safe capacity"
-
       - name: Build Rio Terminal
         run: |
-          cd ~/rio-build/rio-0.2.11
+          cd ~/rio-build/rio-0.2.15
           cargo build --release
-
       - name: Install Rio to staging directory
         run: |
           mkdir -p ~/rio-install/usr/bin
-          cp ~/rio-build/rio-0.2.11/target/release/rio ~/rio-install/usr/bin/rio-bin
-
+          cp ~/rio-build/rio-0.2.15/target/release/rio ~/rio-install/usr/bin/rio-bin
       - name: Bundle all shared library dependencies
         run: |
           cd ~/rio-install
           mkdir -p usr/lib
           chmod +w usr/bin/rio-bin
-          # Copy libraries identified by ldd for rio-bin
           ldd usr/bin/rio-bin | grep -o '/[^ ]*\.so[^ ]*' | sort -u | while read lib; do
             cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy $lib"; exit 1; }
           done
-          # Explicitly copy additional libraries and their dependencies
-          for lib in /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0 /usr/lib/x86_64-linux-gnu/libxkbcommon.so.0 \
-                     /usr/lib/x86_64-linux-gnu/libfontconfig.so.1 /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 \
-                     /usr/lib/x86_64-linux-gnu/libEGL.so.1 /usr/lib/x86_64-linux-gnu/libGLESv2.so.2; do
-            if [ -f "$lib" ]; then
-              cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy $lib"; exit 1; }
-            else
-              echo "Error: Library $lib not found on system"
-              exit 1
-            fi
-          done
-          # Copy symbolic links for libxkbcommon-x11.so and graphics libraries
-          for link in /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so /usr/lib/x86_64-linux-gnu/libEGL.so \
-                      /usr/lib/x86_64-linux-gnu/libGLESv2.so; do
-            if [ -f "$link" ]; then
-              cp -v "$link" usr/lib/ || { echo "Error: Failed to copy $link"; exit 1; }
-            fi
-          done
-          # Copy dependencies of libxkbcommon-x11.so.0, libEGL.so.1, and libGLESv2.so.2
-          for lib in usr/lib/libxkbcommon-x11.so.0 usr/lib/libEGL.so.1 usr/lib/libGLESv2.so.2; do
-            ldd "$lib" | grep -o '/[^ ]*\.so[^ ]*' | sort -u | while read dep; do
-              cp -v "$dep" usr/lib/ || { echo "Error: Failed to copy dependency $dep"; exit 1; }
-            done
-          done
-          # Verify that critical libraries are present
-          for lib in libxkbcommon-x11.so.0 libxkbcommon.so.0 libEGL.so.1 libGLESv2.so.2; do
-            if [ -f "usr/lib/$lib" ]; then
-              echo "Successfully copied $lib"
-            else
-              echo "Error: $lib not found in usr/lib/"
-              exit 1
-            fi
-          done
-          # List contents of usr/lib for debugging
+          cp -v /usr/lib/x86_64-linux-gnu/libfontconfig.so.1 usr/lib/
+          cp -v /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 usr/lib/
           ls -l usr/lib/
-
       - name: Bundle font files and fontconfig config
         run: |
           cd ~/rio-install
@@ -113,28 +73,17 @@ jobs:
           <?xml version="1.0"?>
           <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
           <fontconfig>
-            <dir>./share/fonts</dir>
-            <cachedir>./cache</cachedir>
+            <dir>/home/danrobi/Downloads/rio-portable/rio-0.2.15-portable/usr/share/fonts</dir>
+            <cachedir>/home/danrobi/Downloads/rio-portable/rio-0.2.15-portable/usr/cache</cachedir>
           </fontconfig>
           EOF
           mkdir -p usr/cache
           export FONTCONFIG_FILE=$PWD/usr/etc/fonts/fonts.conf
-          fc-cache -fv $PWD/usr/share/fonts
-          # Verify font cache
-          fc-list | grep "DejaVu Sans Mono" || echo "Warning: DejaVu Sans Mono not found in font cache"
-
+          fc-cache -fv /home/danrobi/Downloads/rio-portable/rio-0.2.15-portable/usr/share/fonts
       - name: Ensure RPATH with patchelf
         run: |
           cd ~/rio-install
           patchelf --force-rpath --set-rpath \$ORIGIN/../lib usr/bin/rio-bin
-          # Verify RPATH
-          if patchelf --print-rpath usr/bin/rio-bin | grep -q "\$ORIGIN/../lib"; then
-            echo "RPATH successfully set to \$ORIGIN/../lib"
-          else
-            echo "Error: Failed to set RPATH"
-            exit 1
-          fi
-
       - name: Create configuration file with font specification
         run: |
           cd ~/rio-install
@@ -160,13 +109,12 @@ jobs:
           chmod 644 usr/config/config.toml
           echo "Config contents after creation:"
           cat usr/config/config.toml
-
       - name: Create launcher script
         run: |
           cd ~/rio-install/usr/bin
           cat > rio << EOF
           #!/bin/bash
-          DIR="\$(dirname "\$(realpath "\$0)")"
+          DIR="\$(dirname "\$(realpath "\$0")")"
           export FONTCONFIG_FILE="\$DIR/../etc/fonts/fonts.conf"
           echo "Using FONTCONFIG_FILE: \$FONTCONFIG_FILE"
           ls -l "\$FONTCONFIG_FILE" || echo "Fontconfig file not found!"
@@ -177,52 +125,25 @@ jobs:
           chmod 644 ~/.config/rio/config.toml
           echo "Using config: ~/.config/rio/config.toml"
           cat ~/.config/rio/config.toml
-          # Debug: List libraries in usr/lib
-          echo "Listing libraries in \$DIR/../lib:"
-          ls -l "\$DIR/../lib/"
-          # Debug: Verify critical libraries
-          for lib in libxkbcommon-x11.so.0 libEGL.so.1 libGLESv2.so.2; do
-            if [ -f "\$DIR/../lib/\$lib" ]; then
-              echo "Found \$lib"
-            else
-              echo "Error: \$lib not found in \$DIR/../lib/"
-              exit 1
-            fi
-          done
-          # Debug: Check ldd output for rio-bin
-          echo "Checking ldd for rio-bin:"
-          ldd "\$DIR/rio-bin" || echo "ldd failed"
-          # Debug: Enable GL debugging
-          export LIBGL_DEBUG=verbose
-          # Set LD_LIBRARY_PATH as fallback
-          export LD_LIBRARY_PATH="\$DIR/../lib:\$LD_LIBRARY_PATH"
-          echo "Using LD_LIBRARY_PATH: \$LD_LIBRARY_PATH"
           "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" "\$@"
-          # Unset LD_LIBRARY_PATH for post-execution commands to avoid glibc issues
-          unset LD_LIBRARY_PATH
           echo "Rio closed. Checking ~/.config/rio/:"
           ls -ld ~/.config/rio/
           ls -l ~/.config/rio/config.toml
           EOF
           chmod +x rio
           cat rio
-
       - name: Create zip file with binary and libraries
         run: |
           cd ~/rio-install
-          zip -r ~/rio-0.2.11-portable.zip .
-          # Debug: List contents of zip file
-          unzip -l ~/rio-0.2.11-portable.zip
-
+          zip -r ~/rio-0.2.15-portable.zip .
       - name: Generate SHA256 checksum
         run: |
-          sha256sum ~/rio-0.2.11-portable.zip > ~/rio-0.2.11-portable.zip.sha256
-          cat ~/rio-0.2.11-portable.zip.sha256
-
+          sha256sum ~/rio-0.2.15-portable.zip > ~/rio-0.2.15-portable.zip.sha256
+          cat ~/rio-0.2.15-portable.zip.sha256
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: rio-portable
           path: |
-            ~/rio-0.2.11-portable.zip
-            ~/rio-0.2.11-portable.zip.sha256
+            ~/rio-0.2.15-portable.zip
+            ~/rio-0.2.15-portable.zip.sha256
