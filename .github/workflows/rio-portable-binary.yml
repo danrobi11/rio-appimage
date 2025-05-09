@@ -24,7 +24,7 @@ jobs:
             rustc cargo \
             libxkbcommon-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
             libx11-dev libxcb1-dev libxkbcommon-x11-dev libwayland-dev \
-            libfontconfig-dev fonts-dejavu-core
+            libfontconfig-dev fonts-dejavu-core libbsd-dev
       - name: Download Rio Terminal v0.2.15 source
         run: |
           mkdir -p ~/rio-build
@@ -74,6 +74,7 @@ jobs:
           cp -v /usr/lib/x86_64-linux-gnu/libgbm.so.1 usr/lib/
           cp -v /usr/lib/x86_64-linux-gnu/libXau.so.6 usr/lib/
           cp -v /usr/lib/x86_64-linux-gnu/libXdmcp.so.6 usr/lib/
+          cp -v /usr/lib/x86_64-linux-gnu/libbsd.so.0 usr/lib/
           cp -v /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 usr/lib/
           ls -l usr/lib/
       - name: Bundle font files and fontconfig config
@@ -88,8 +89,9 @@ jobs:
           <?xml version="1.0"?>
           <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
           <fontconfig>
-            <dir>$PWD/../share/fonts</dir>
-            <cachedir>$PWD/../cache</cachedir>
+            <dir>.</dir>
+            <dir>../share/fonts</dir>
+            <cachedir>../cache</cachedir>
           </fontconfig>
           EOF
           export FONTCONFIG_FILE=$PWD/usr/etc/fonts/fonts.conf
@@ -131,17 +133,23 @@ jobs:
           DIR="\$(dirname "\$(realpath "\$0")")"
           export FONTCONFIG_FILE="\$DIR/../etc/fonts/fonts.conf"
           echo "Using FONTCONFIG_FILE: \$FONTCONFIG_FILE"
+          ls -l "\$DIR/../etc/fonts" || echo "Fontconfig directory not found!"
           ls -l "\$FONTCONFIG_FILE" || echo "Fontconfig file not found!"
           mkdir -p "\$DIR/../cache"
           chmod -R u+w "\$DIR/../cache"
+          echo "Font cache directory:"
+          ls -ld "\$DIR/../cache"
           fc-cache -fv "\$DIR/../share/fonts" || echo "Failed to generate font cache!"
           fc-list | grep "DejaVu Sans Mono" || echo "DejaVu Sans Mono not found in fontconfig!"
+          echo "Bundled libraries:"
+          ls -l "\$DIR/../lib"
           CONFIG="\$DIR/../config/config.toml"
           mkdir -p ~/.config/rio
           cp "\$CONFIG" ~/.config/rio/config.toml || { echo "Failed to copy config"; exit 1; }
           chmod 644 ~/.config/rio/config.toml
           echo "Using config: ~/.config/rio/config.toml"
           cat ~/.config/rio/config.toml
+          export LD_LIBRARY_PATH="\$DIR/../lib:\$LD_LIBRARY_PATH"
           "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" "\$@"
           echo "Rio closed. Checking ~/.config/rio/:"
           ls -ld ~/.config/rio/
