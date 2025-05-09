@@ -71,6 +71,9 @@ jobs:
           cp -v /usr/lib/x86_64-linux-gnu/libfreetype.so.6 usr/lib/
           cp -v /usr/lib/x86_64-linux-gnu/libEGL.so.1 usr/lib/
           cp -v /usr/lib/x86_64-linux-gnu/libGL.so.1 usr/lib/
+          cp -v /usr/lib/x86_64-linux-gnu/libgbm.so.1 usr/lib/
+          cp -v /usr/lib/x86_64-linux-gnu/libXau.so.6 usr/lib/
+          cp -v /usr/lib/x86_64-linux-gnu/libXdmcp.so.6 usr/lib/
           cp -v /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 usr/lib/
           ls -l usr/lib/
       - name: Bundle font files and fontconfig config
@@ -79,15 +82,16 @@ jobs:
           mkdir -p usr/share/fonts/truetype/dejavu
           cp -v /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf usr/share/fonts/truetype/dejavu/
           mkdir -p usr/etc/fonts
+          mkdir -p usr/cache
+          chmod -R u+w usr/cache
           cat > usr/etc/fonts/fonts.conf << EOF
           <?xml version="1.0"?>
           <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
           <fontconfig>
-            <dir>$PWD/usr/share/fonts</dir>
-            <cachedir>$PWD/usr/cache</cachedir>
+            <dir>$PWD/../share/fonts</dir>
+            <cachedir>$PWD/../cache</cachedir>
           </fontconfig>
           EOF
-          mkdir -p usr/cache
           export FONTCONFIG_FILE=$PWD/usr/etc/fonts/fonts.conf
           fc-cache -fv $PWD/usr/share/fonts
       - name: Ensure RPATH with patchelf
@@ -128,6 +132,8 @@ jobs:
           export FONTCONFIG_FILE="\$DIR/../etc/fonts/fonts.conf"
           echo "Using FONTCONFIG_FILE: \$FONTCONFIG_FILE"
           ls -l "\$FONTCONFIG_FILE" || echo "Fontconfig file not found!"
+          mkdir -p "\$DIR/../cache"
+          chmod -R u+w "\$DIR/../cache"
           fc-cache -fv "\$DIR/../share/fonts" || echo "Failed to generate font cache!"
           fc-list | grep "DejaVu Sans Mono" || echo "DejaVu Sans Mono not found in fontconfig!"
           CONFIG="\$DIR/../config/config.toml"
