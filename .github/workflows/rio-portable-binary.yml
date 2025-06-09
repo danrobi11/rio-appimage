@@ -24,58 +24,45 @@ jobs:
             rustc cargo \
             libxkbcommon-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
             libx11-dev libxcb1-dev libxkbcommon-x11-dev libwayland-dev \
-            libfontconfig-dev fonts-dejavu-core libbsd-dev libmd-dev
-      - name: Download Rio Terminal v0.2.15 source
+            libfontconfig-dev fonts-dejavu-core mesa-utils
+      - name: Download Rio Terminal v0.3.0 source
         run: |
           mkdir -p ~/rio-build
           cd ~/rio-build
-          wget "https://github.com/raphamorim/rio/archive/refs/tags/v0.2.15.tar.gz" -O rio-0.2.15.tar.gz
-          tar -xzf rio-0.2.15.tar.gz
+          wget "https://github.com/raphamorim/rio/archive/refs/tags/v0.3.0.tar.gz" -O rio-0.3.0.tar.gz
+          tar -xzf rio-0.3.0.tar.gz
       - name: Patch sugarloaf for font fallback
         run: |
-          cd ~/rio-build/rio-0.2.15
+          cd ~/rio-build/rio-0.3.0
           echo 'pub const DEJAVU_SANS_MONO: &[u8] = include_bytes!("DejaVuSansMono.ttf");' >> sugarloaf/src/font/mod.rs
           cp /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf sugarloaf/src/font/
           sed -i 's/FontRef::from_index(\([^)]*\))\.unwrap()/FontRef::from_index(\1).unwrap_or_else(|| { eprintln!("Font not found, using bundled DejaVu Sans Mono"); FontRef::from_index(DEJAVU_SANS_MONO, 0).expect("Bundled DejaVu Sans Mono index missing") })/' sugarloaf/src/font/mod.rs || true
           echo "Applied font fallback patch"
       - name: Patch grid storage to prevent capacity overflow
         run: |
-          cd ~/rio-build/rio-0.2.15
+          cd ~/rio-build/rio-0.3.0
           sed -i 's|pub fn new(cols: usize, rows: usize) -> Self {|pub fn new(cols: usize, rows: usize) -> Self { let cols = cols.min(1024); let rows = rows.min(1024); let capacity = cols.checked_mul(rows).unwrap_or(1024 * 1024);|' rio-backend/src/crosswords/grid/storage.rs || true
           sed -i 's|Vec::with_capacity(cols \* rows)|Vec::with_capacity(capacity)|' rio-backend/src/crosswords/grid/storage.rs || true
           echo "Patched grid storage with safe capacity"
       - name: Build Rio Terminal
         run: |
-          cd ~/rio-build/rio-0.2.15
+          cd ~/rio-build/rio-0.3.0
           cargo build --release
       - name: Install Rio to staging directory
         run: |
           mkdir -p ~/rio-install/usr/bin
-          cp ~/rio-build/rio-0.2.15/target/release/rio ~/rio-install/usr/bin/rio-bin
+          cp ~/rio-build/rio-0.3.0/target/release/rio ~/rio-install/usr/bin/rio-bin
       - name: Bundle all shared library dependencies
         run: |
           cd ~/rio-install
           mkdir -p usr/lib
           chmod +w usr/bin/rio-bin
-          ldd usr/bin/rio-bin | grep -o '/[^ ]*\.so[^ ]*' | sort -u | grep -v 'libc\.so' | while read lib; do
+          ldd usr/bin/rio-bin | grep -o '/[^ ]*\.so[^ ]*' | sort -u | while read lib; do
             cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy $lib"; exit 1; }
           done
           cp -v /usr/lib/x86_64-linux-gnu/libfontconfig.so.1 usr/lib/
-          cp -v /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0 usr/lib/
-          cp -v /usr/lib/x86_64-linux-gnu/libxkbcommon.so.0 usr/lib/
-          cp -v /usr/lib/x86_64-linux-gnu/libX11.so.6 usr/lib/
-          cp -v /usr/lib/x86_64-linux-gnu/libxcb.so.1 usr/lib/
-          cp -v /usr/lib/x86_64-linux-gnu/libwayland-client.so.0 usr/lib/
-          cp -v /usr/lib/x86_64-linux-gnu/libwayland-cursor.so.0 usr/lib/
-          cp -v /usr/lib/x86_64-linux-gnu/libwayland-egl.so.1 usr/lib/
-          cp -v /usr/lib/x86_64-linux-gnu/libfreetype.so.6 usr/lib/
-          cp -v /usr/lib/x86_64-linux-gnu/libEGL.so.1 usr/lib/
-          cp -v /usr/lib/x86_64-linux-gnu/libGL.so.1 usr/lib/
-          cp -v /usr/lib/x86_64-linux-gnu/libgbm.so.1 usr/lib/
-          cp -v /usr/lib/x86_64-linux-gnu/libXau.so.6 usr/lib/
-          cp -v /usr/lib/x86_64-linux-gnu/libXdmcp.so.6 usr/lib/
-          cp -v /usr/lib/x86_64-linux-gnu/libbsd.so.0 usr/lib/
-          cp -v /usr/lib/x86_64-linux-gnu/libmd.so.0 usr/lib/
+          cp -v /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 usr/lib/
+          cp -v /lib/x86_64-linux-gnu/libc.so.6 usr/lib/
           ls -l usr/lib/
       - name: Bundle font files and fontconfig config
         run: |
@@ -83,19 +70,18 @@ jobs:
           mkdir -p usr/share/fonts/truetype/dejavu
           cp -v /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf usr/share/fonts/truetype/dejavu/
           mkdir -p usr/etc/fonts
-          mkdir -p usr/cache
-          chmod -R u+w usr/cache
           cat > usr/etc/fonts/fonts.conf << EOF
           <?xml version="1.0"?>
           <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
           <fontconfig>
-            <dir prefix="cwd">../share/fonts</dir>
-            <cachedir prefix="cwd">../cache</cachedir>
+            <dir>\$DIR/../share/fonts</dir>
+            <cachedir>\$DIR/../cache</cachedir>
           </fontconfig>
           EOF
+          mkdir -p usr/cache
+          chmod -R u+rwX usr/cache
           export FONTCONFIG_FILE=$PWD/usr/etc/fonts/fonts.conf
           fc-cache -fv $PWD/usr/share/fonts
-          cat usr/etc/fonts/fonts.conf
       - name: Ensure RPATH with patchelf
         run: |
           cd ~/rio-install
@@ -133,30 +119,24 @@ jobs:
           DIR="\$(dirname "\$(realpath "\$0")")"
           export FONTCONFIG_FILE="\$DIR/../etc/fonts/fonts.conf"
           export FONTCONFIG_PATH="\$DIR/../etc/fonts"
+          export LD_LIBRARY_PATH="\$DIR/../lib"
+          export LIBGL_DRIVERS_PATH="\$DIR/../lib/dri"
+          export MESA_DEBUG=1
+          export EGL_LOG_LEVEL=debug
           echo "Using FONTCONFIG_FILE: \$FONTCONFIG_FILE"
           echo "Using FONTCONFIG_PATH: \$FONTCONFIG_PATH"
-          ls -l "\$DIR/../etc/fonts" || echo "Fontconfig directory not found!"
           ls -l "\$FONTCONFIG_FILE" || echo "Fontconfig file not found!"
-          cat "\$FONTCONFIG_FILE" || echo "Failed to read fonts.conf"
-          mkdir -p "\$DIR/../cache"
-          chmod -R u+w "\$DIR/../cache"
-          echo "Font cache directory:"
-          ls -ld "\$DIR/../cache"
-          fc-cache -fv "\$DIR/../share/fonts" || echo "Failed to generate font cache!"
           fc-list | grep "DejaVu Sans Mono" || echo "DejaVu Sans Mono not found in fontconfig!"
-          echo "Bundled libraries:"
-          ls -l "\$DIR/../lib"
-          ldd "\$DIR/rio-bin" || echo "Failed to run ldd on rio-bin"
           CONFIG="\$DIR/../config/config.toml"
           mkdir -p ~/.config/rio
           cp "\$CONFIG" ~/.config/rio/config.toml || { echo "Failed to copy config"; exit 1; }
           chmod 644 ~/.config/rio/config.toml
           echo "Using config: ~/.config/rio/config.toml"
           cat ~/.config/rio/config.toml
-          export LD_LIBRARY_PATH="\$DIR/../lib"
+          echo "Bundled libraries:"
+          ls -l "\$DIR/../lib/"
           echo "LD_LIBRARY_PATH: \$LD_LIBRARY_PATH"
-          "\$DIR/rio-bin" "\$@" || echo "Failed to run rio-bin"
-          unset LD_LIBRARY_PATH
+          "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" "\$@" || { echo "Failed to run rio-bin"; exit 1; }
           echo "Rio closed. Checking ~/.config/rio/:"
           ls -ld ~/.config/rio/
           ls -l ~/.config/rio/config.toml
@@ -166,15 +146,15 @@ jobs:
       - name: Create zip file with binary and libraries
         run: |
           cd ~/rio-install
-          zip -r ~/rio-0.2.15-portable.zip .
+          zip -r ~/rio-0.3.0-portable.zip .
       - name: Generate SHA256 checksum
         run: |
-          sha256sum ~/rio-0.2.15-portable.zip > ~/rio-0.2.15-portable.zip.sha256
-          cat ~/rio-0.2.15-portable.zip.sha256
+          sha256sum ~/rio-0.3.0-portable.zip > ~/rio-0.3.0-portable.zip.sha256
+          cat ~/rio-0.3.0-portable.zip.sha256
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: rio-portable
           path: |
-            ~/rio-0.2.15-portable.zip
-            ~/rio-0.2.15-portable.zip.sha256
+            ~/rio-0.3.0-portable.zip
+            ~/rio-0.3.0-portable.zip.sha256
