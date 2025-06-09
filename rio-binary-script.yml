@@ -25,33 +25,33 @@ jobs:
             libxkbcommon-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
             libx11-dev libxcb1-dev libxkbcommon-x11-dev libwayland-dev \
             libfontconfig-dev fonts-dejavu-core
-      - name: Download Rio Terminal v0.2.11 source
+      - name: Download Rio Terminal v0.3.0 source
         run: |
           mkdir -p ~/rio-build
           cd ~/rio-build
-          wget "https://github.com/raphamorim/rio/archive/refs/tags/v0.2.11.tar.gz" -O rio-0.2.11.tar.gz
-          tar -xzf rio-0.2.11.tar.gz
+          wget "https://github.com/raphamorim/rio/archive/refs/tags/v0.3.0.tar.gz" -O rio-0.3.0.tar.gz
+          tar -xzf rio-0.3.0.tar.gz
       - name: Patch sugarloaf for font fallback
         run: |
-          cd ~/rio-build/rio-0.2.11
+          cd ~/rio-build/rio-0.3.0
           echo 'pub const DEJAVU_SANS_MONO: &[u8] = include_bytes!("DejaVuSansMono.ttf");' >> sugarloaf/src/font/mod.rs
           cp /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf sugarloaf/src/font/
           sed -i 's/FontRef::from_index(\([^)]*\))\.unwrap()/FontRef::from_index(\1).unwrap_or_else(|| { eprintln!("Font not found, using bundled DejaVu Sans Mono"); FontRef::from_index(DEJAVU_SANS_MONO, 0).expect("Bundled DejaVu Sans Mono index missing") })/' sugarloaf/src/font/mod.rs || true
           echo "Applied font fallback patch"
       - name: Patch grid storage to prevent capacity overflow
         run: |
-          cd ~/rio-build/rio-0.2.11
+          cd ~/rio-build/rio-0.3.0
           sed -i 's|pub fn new(cols: usize, rows: usize) -> Self {|pub fn new(cols: usize, rows: usize) -> Self { let cols = cols.min(1024); let rows = rows.min(1024); let capacity = cols.checked_mul(rows).unwrap_or(1024 * 1024);|' rio-backend/src/crosswords/grid/storage.rs || true
           sed -i 's|Vec::with_capacity(cols \* rows)|Vec::with_capacity(capacity)|' rio-backend/src/crosswords/grid/storage.rs || true
           echo "Patched grid storage with safe capacity"
       - name: Build Rio Terminal
         run: |
-          cd ~/rio-build/rio-0.2.11
+          cd ~/rio-build/rio-0.3.0
           cargo build --release
       - name: Install Rio to staging directory
         run: |
           mkdir -p ~/rio-install/usr/bin
-          cp ~/rio-build/rio-0.2.11/target/release/rio ~/rio-install/usr/bin/rio-bin
+          cp ~/rio-build/rio-0.3.0/target/release/rio ~/rio-install/usr/bin/rio-bin
       - name: Bundle all shared library dependencies
         run: |
           cd ~/rio-install
@@ -73,13 +73,13 @@ jobs:
           <?xml version="1.0"?>
           <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
           <fontconfig>
-            <dir>/home/danrobi/Downloads/rio-portable/rio-0.2.11-portable/usr/share/fonts</dir>
-            <cachedir>/home/danrobi/Downloads/rio-portable/rio-0.2.11-portable/usr/cache</cachedir>
+            <dir>/home/danrobi/Downloads/rio-portable/rio-0.3.0-portable/usr/share/fonts</dir>
+            <cachedir>/home/danrobi/Downloads/rio-portable/rio-0.3.0-portable/usr/cache</cachedir>
           </fontconfig>
           EOF
           mkdir -p usr/cache
           export FONTCONFIG_FILE=$PWD/usr/etc/fonts/fonts.conf
-          fc-cache -fv /home/danrobi/Downloads/rio-portable/rio-0.2.11-portable/usr/share/fonts
+          fc-cache -fv /home/danrobi/Downloads/rio-portable/rio-0.3.0-portable/usr/share/fonts
       - name: Ensure RPATH with patchelf
         run: |
           cd ~/rio-install
@@ -135,15 +135,15 @@ jobs:
       - name: Create zip file with binary and libraries
         run: |
           cd ~/rio-install
-          zip -r ~/rio-0.2.11-portable.zip .
+          zip -r ~/rio-0.3.0-portable.zip .
       - name: Generate SHA256 checksum
         run: |
-          sha256sum ~/rio-0.2.11-portable.zip > ~/rio-0.2.11-portable.zip.sha256
-          cat ~/rio-0.2.11-portable.zip.sha256
+          sha256sum ~/rio-0.3.0-portable.zip > ~/rio-0.3.0-portable.zip.sha256
+          cat ~/rio-0.3.0-portable.zip.sha256
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: rio-portable
           path: |
-            ~/rio-0.2.11-portable.zip
-            ~/rio-0.2.11-portable.zip.sha256
+            ~/rio-0.3.0-portable.zip
+            ~/rio-0.3.0-portable.zip.sha256
