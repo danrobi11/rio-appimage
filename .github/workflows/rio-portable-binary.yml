@@ -19,39 +19,53 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential curl tar pkg-config zip \
+            build-essential curl tar pkg-config zip unzip \
             git wget patchelf \
             rustc cargo \
             libxkbcommon-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
             libx11-dev libxcb1-dev libxkbcommon-x11-dev libwayland-dev \
             libfontconfig-dev fonts-dejavu-core mesa-utils
-      - name: Download Rio Terminal v0.3.0 source
+      - name: Download Rio Terminal nightly source
         run: |
           mkdir -p ~/rio-build
           cd ~/rio-build
-          wget "https://github.com/raphamorim/rio/archive/refs/tags/v0.3.0.tar.gz" -O rio-0.3.0.tar.gz
-          tar -xzf rio-0.3.0.tar.gz
+          echo "Downloading nightly zip archive..."
+          wget "https://github.com/raphamorim/rio/archive/refs/tags/nightly.zip" -O rio-nightly.zip || {
+            echo "Error: Failed to download nightly zip archive."
+            exit 1
+          }
+          if [ -f rio-nightly.zip ]; then
+            unzip rio-nightly.zip
+            mv rio-nightly rio-nightly-source
+            ls -l
+          else
+            echo "Error: Downloaded zip file not found."
+            exit 1
+          fi
+      - name: List repository tags for debugging
+        run: |
+          git ls-remote --tags https://github.com/raphamorim/rio.git | grep -o 'refs/tags/.*' | sed 's|refs/tags/||'
       - name: Patch sugarloaf for font fallback
         run: |
-          cd ~/rio-build/rio-0.3.0
+          cd ~/rio-build/rio-nightly-source
           echo 'pub const DEJAVU_SANS_MONO: &[u8] = include_bytes!("DejaVuSansMono.ttf");' >> sugarloaf/src/font/mod.rs
           cp /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf sugarloaf/src/font/
           sed -i 's/FontRef::from_index(\([^)]*\))\.unwrap()/FontRef::from_index(\1).unwrap_or_else(|| { eprintln!("Font not found, using bundled DejaVu Sans Mono"); FontRef::from_index(DEJAVU_SANS_MONO, 0).expect("Bundled DejaVu Sans Mono index missing") })/' sugarloaf/src/font/mod.rs || true
           echo "Applied font fallback patch"
       - name: Patch grid storage to prevent capacity overflow
         run: |
-          cd ~/rio-build/rio-0.3.0
+          cd ~/rio-build/rio-nightly-source
           sed -i 's|pub fn new(cols: usize, rows: usize) -> Self {|pub fn new(cols: usize, rows: usize) -> Self { let cols = cols.min(1024); let rows = rows.min(1024); let capacity = cols.checked_mul(rows).unwrap_or(1024 * 1024);|' rio-backend/src/crosswords/grid/storage.rs || true
           sed -i 's|Vec::with_capacity(cols \* rows)|Vec::with_capacity(capacity)|' rio-backend/src/crosswords/grid/storage.rs || true
           echo "Patched grid storage with safe capacity"
       - name: Build Rio Terminal
         run: |
-          cd ~/rio-build/rio-0.3.0
+          cd ~/rio-build/rio-nightly-source
           cargo build --release
       - name: Install Rio to staging directory
         run: |
           mkdir -p ~/rio-install/usr/bin
-          cp ~/rio-build/rio-0.3.0/target/release/rio ~/rio-install/usr/bin/rio-bin
+          cp ~/rio-build/rio-nightly-source/target/release/rio ~/rio-install/usr/bin/rio-bin
       - name: Bundle all shared library dependencies
         run: |
           cd ~/rio-install
@@ -146,15 +160,15 @@ jobs:
       - name: Create zip file with binary and libraries
         run: |
           cd ~/rio-install
-          zip -r ~/rio-0.3.0-portable.zip .
+          zip -r ~/rio-nightly-portable.zip .
       - name: Generate SHA256 checksum
         run: |
-          sha256sum ~/rio-0.3.0-portable.zip > ~/rio-0.3.0-portable.zip.sha256
-          cat ~/rio-0.3.0-portable.zip.sha256
+          sha256sum ~/rio-nightly-portable.zip > ~/rio-nightly-portable.zip.sha256
+          cat ~/rio-nightly-portable.zip.sha256
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: rio-portable
           path: |
-            ~/rio-0.3.0-portable.zip
-            ~/rio-0.3.0-portable.zip.sha256
+            ~/rio-nightly-portable.zip
+            ~/rio-nightly-portable.zip.sha256
