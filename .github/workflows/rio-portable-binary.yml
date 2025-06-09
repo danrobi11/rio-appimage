@@ -25,6 +25,7 @@ jobs:
             libxkbcommon-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
             libx11-dev libxcb1-dev libxkbcommon-x11-dev libwayland-dev \
             libfontconfig-dev fonts-dejavu-core mesa-utils
+
       - name: Download Rio Terminal nightly source
         run: |
           mkdir -p ~/rio-build
@@ -42,9 +43,11 @@ jobs:
             echo "Error: Downloaded zip file not found."
             exit 1
           fi
+
       - name: List repository tags for debugging
         run: |
           git ls-remote --tags https://github.com/raphamorim/rio.git | grep -o 'refs/tags/.*' | sed 's|refs/tags/||'
+
       - name: Patch sugarloaf for font fallback
         run: |
           cd ~/rio-build/rio-nightly-source
@@ -52,32 +55,38 @@ jobs:
           cp /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf sugarloaf/src/font/
           sed -i 's/FontRef::from_index(\([^)]*\))\.unwrap()/FontRef::from_index(\1).unwrap_or_else(|| { eprintln!("Font not found, using bundled DejaVu Sans Mono"); FontRef::from_index(DEJAVU_SANS_MONO, 0).expect("Bundled DejaVu Sans Mono index missing") })/' sugarloaf/src/font/mod.rs || true
           echo "Applied font fallback patch"
+
       - name: Patch grid storage to prevent capacity overflow
         run: |
           cd ~/rio-build/rio-nightly-source
           sed -i 's|pub fn new(cols: usize, rows: usize) -> Self {|pub fn new(cols: usize, rows: usize) -> Self { let cols = cols.min(1024); let rows = rows.min(1024); let capacity = cols.checked_mul(rows).unwrap_or(1024 * 1024);|' rio-backend/src/crosswords/grid/storage.rs || true
           sed -i 's|Vec::with_capacity(cols \* rows)|Vec::with_capacity(capacity)|' rio-backend/src/crosswords/grid/storage.rs || true
           echo "Patched grid storage with safe capacity"
+
       - name: Build Rio Terminal
         run: |
           cd ~/rio-build/rio-nightly-source
           cargo build --release
+
       - name: Install Rio to staging directory
         run: |
           mkdir -p ~/rio-install/usr/bin
           cp ~/rio-build/rio-nightly-source/target/release/rio ~/rio-install/usr/bin/rio-bin
+
       - name: Bundle all shared library dependencies
         run: |
           cd ~/rio-install
           mkdir -p usr/lib
           chmod +w usr/bin/rio-bin
           ldd usr/bin/rio-bin | grep -o '/[^ ]*\.so[^ ]*' | sort -u | while read lib; do
-            cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy $lib"; exit 1; }
+            # Exclude libc.so.6 and ld-linux-x86-64.so.2
+            if [[ "$lib" != *"/libc.so"* && "$lib" != *"/ld-linux-x86-64.so"* ]]; then
+              cp -v "$lib" usr/lib/ || { echo "Error: Failed to copy $lib"; exit 1; }
+            fi
           done
           cp -v /usr/lib/x86_64-linux-gnu/libfontconfig.so.1 usr/lib/
-          cp -v /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 usr/lib/
-          cp -v /lib/x86_64-linux-gnu/libc.so.6 usr/lib/
           ls -l usr/lib/
+
       - name: Bundle font files and fontconfig config
         run: |
           cd ~/rio-install
@@ -91,15 +100,7 @@ jobs:
             <dir>\$DIR/../share/fonts</dir>
             <cachedir>\$DIR/../cache</cachedir>
           </fontconfig>
-          EOF
-          mkdir -p usr/cache
-          chmod -R u+rwX usr/cache
-          export FONTCONFIG_FILE=$PWD/usr/etc/fonts/fonts.conf
-          fc-cache -fv $PWD/usr/share/fonts
-      - name: Ensure RPATH with patchelf
-        run: |
-          cd ~/rio-install
-          patchelf --force-rpath --set-rpath \$ORIGIN/../lib usr/bin/rio-bin
+          EOFInstall Dependencies:
       - name: Create configuration file with font specification
         run: |
           cd ~/rio-install
@@ -116,7 +117,7 @@ jobs:
           background = "#000000"
           foreground = "#00FFFF"
           cursor = "#00FF00"
-          tabs = "#000000"
+          tabs = "#000000"Install Dependencies:
           tabs-active = "#00FF00"
           selection-foreground = "#00FFFF"
           selection-background = "#000000"
@@ -125,22 +126,23 @@ jobs:
           chmod 644 usr/config/config.toml
           echo "Config contents after creation:"
           cat usr/config/config.toml
+
       - name: Create launcher script
         run: |
           cd ~/rio-install/usr/bin
           cat > rio << EOF
           #!/bin/bash
-          DIR="\$(dirname "\$(realpath "\$0")")"
+          DIR="\$(dirname Install Dependencies:"\$(realpath "\$0")")"
           export FONTCONFIG_FILE="\$DIR/../etc/fonts/fonts.conf"
           export FONTCONFIG_PATH="\$DIR/../etc/fonts"
-          export LD_LIBRARY_PATH="\$DIR/../lib"
+          export LD_LIBRARY_PATH="\$DIR/../lib:/usr/lib:/lib"
           export LIBGL_DRIVERS_PATH="\$DIR/../lib/dri"
           export MESA_DEBUG=1
           export EGL_LOG_LEVEL=debug
           echo "Using FONTCONFIG_FILE: \$FONTCONFIG_FILE"
           echo "Using FONTCONFIG_PATH: \$FONTCONFIG_PATH"
           ls -l "\$FONTCONFIG_FILE" || echo "Fontconfig file not found!"
-          fc-list | grep "DejaVu Sans Mono" || echo "DejaVu Sans Mono not found in fontconfig!"
+          fc-list | grep "DejaVu Sans Mono" || echo "DejaVu Sans Mono not found in fontconfig!"Install Dependencies:
           CONFIG="\$DIR/../config/config.toml"
           mkdir -p ~/.config/rio
           cp "\$CONFIG" ~/.config/rio/config.toml || { echo "Failed to copy config"; exit 1; }
@@ -150,21 +152,24 @@ jobs:
           echo "Bundled libraries:"
           ls -l "\$DIR/../lib/"
           echo "LD_LIBRARY_PATH: \$LD_LIBRARY_PATH"
-          "\$DIR/../lib/ld-linux-x86-64.so.2" --library-path "\$DIR/../lib" "\$DIR/rio-bin" "\$@" || { echo "Failed to run rio-bin"; exit 1; }
+          "\$DIR/rio-bin" "\$@" || { echo "Failed to run rio-bin"; exit 1; }
           echo "Rio closed. Checking ~/.config/rio/:"
           ls -ld ~/.config/rio/
           ls -l ~/.config/rio/config.toml
           EOF
           chmod +x rio
           cat rio
+
       - name: Create zip file with binary and libraries
         run: |
           cd ~/rio-install
           zip -r ~/rio-nightly-portable.zip .
+
       - name: Generate SHA256 checksum
         run: |
           sha256sum ~/rio-nightly-portable.zip > ~/rio-nightly-portable.zip.sha256
           cat ~/rio-nightly-portable.zip.sha256
+
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
