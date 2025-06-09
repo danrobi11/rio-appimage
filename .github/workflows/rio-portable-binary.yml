@@ -97,16 +97,31 @@ jobs:
           <?xml version="1.0"?>
           <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
           <fontconfig>
-            <dir>\$DIR/../share/fonts</dir>
-            <cachedir>\$DIR/../cache</cachedir>
+            <dir prefix="relative">../share/fonts</dir>
+            <cachedir prefix="relative">../cache</cachedir>
+            <config>
+              <rescan>
+                <int>30</int>
+              </rescan>
+            </config>
           </fontconfig>
-          EOFInstall Dependencies:
+          EOF
+          mkdir -p usr/cache
+          chmod -R u+rwX usr/cache
+          export FONTCONFIG_FILE=$PWD/usr/etc/fonts/fonts.conf
+          fc-cache -fv $PWD/usr/share/fonts
+
+      - name: Ensure RPATH with patchelf
+        run: |
+          cd ~/rio-install
+          patchelf --force-rpath --set-rpath \$ORIGIN/../lib:/usr/lib:/lib usr/bin/rio-bin
+
       - name: Create configuration file with font specification
         run: |
           cd ~/rio-install
           mkdir -p usr/config
           rm -f usr/config/config.toml
-          cat > usr/config/config.toml << 'EOF'
+          cat > usr/config/config.toml << EOF
           use-fork = false
           [fonts]
           regular = { family = "DejaVu Sans Mono", style = "Normal" }
@@ -117,7 +132,7 @@ jobs:
           background = "#000000"
           foreground = "#00FFFF"
           cursor = "#00FF00"
-          tabs = "#000000"Install Dependencies:
+          tabs = "#000000"
           tabs-active = "#00FF00"
           selection-foreground = "#00FFFF"
           selection-background = "#000000"
@@ -132,7 +147,7 @@ jobs:
           cd ~/rio-install/usr/bin
           cat > rio << EOF
           #!/bin/bash
-          DIR="\$(dirname Install Dependencies:"\$(realpath "\$0")")"
+          DIR="\$(dirname "\$(realpath "\$0")")"
           export FONTCONFIG_FILE="\$DIR/../etc/fonts/fonts.conf"
           export FONTCONFIG_PATH="\$DIR/../etc/fonts"
           export LD_LIBRARY_PATH="\$DIR/../lib:/usr/lib:/lib"
@@ -141,14 +156,24 @@ jobs:
           export EGL_LOG_LEVEL=debug
           echo "Using FONTCONFIG_FILE: \$FONTCONFIG_FILE"
           echo "Using FONTCONFIG_PATH: \$FONTCONFIG_PATH"
-          ls -l "\$FONTCONFIG_FILE" || echo "Fontconfig file not found!"
-          fc-list | grep "DejaVu Sans Mono" || echo "DejaVu Sans Mono not found in fontconfig!"Install Dependencies:
+          if [ -f "\$FONTCONFIG_FILE" ]; then
+            ls -l "\$FONTCONFIG_FILE"
+          else
+            echo "Fontconfig file not found!"
+            exit 1
+          fi
+          fc-list | grep -i "DejaVu Sans Mono" || { echo "DejaVu Sans Mono not found in fontconfig!"; exit 1; }
           CONFIG="\$DIR/../config/config.toml"
-          mkdir -p ~/.config/rio
-          cp "\$CONFIG" ~/.config/rio/config.toml || { echo "Failed to copy config"; exit 1; }
-          chmod 644 ~/.config/rio/config.toml
-          echo "Using config: ~/.config/rio/config.toml"
-          cat ~/.config/rio/config.toml
+          if [ -f "\$CONFIG" ]; then
+            mkdir -p ~/.config/rio
+            cp "\$CONFIG" ~/.config/rio/config.toml || { echo "Failed to copy config"; exit 1; }
+            chmod 644 ~/.config/rio/config.toml
+            echo "Using config: ~/.config/rio/config.toml"
+            cat ~/.config/rio/config.toml
+          else
+            echo "Config file not found: \$CONFIG"
+            exit 1
+          fi
           echo "Bundled libraries:"
           ls -l "\$DIR/../lib/"
           echo "LD_LIBRARY_PATH: \$LD_LIBRARY_PATH"
