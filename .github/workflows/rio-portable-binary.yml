@@ -97,8 +97,8 @@ jobs:
           <?xml version="1.0"?>
           <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
           <fontconfig>
-            <dir prefix="relative">../share/fonts</dir>
-            <cachedir prefix="relative">../cache</cachedir>
+            <dir>$PWD/usr/share/fonts</dir>
+            <cachedir>$PWD/usr/cache</cachedir>
             <config>
               <rescan>
                 <int>30</int>
@@ -110,6 +110,9 @@ jobs:
           chmod -R u+rwX usr/cache
           export FONTCONFIG_FILE=$PWD/usr/etc/fonts/fonts.conf
           fc-cache -fv $PWD/usr/share/fonts
+          # Verify font detection
+          fc-list | grep -i "DejaVu Sans Mono" || { echo "Error: DejaVu Sans Mono not detected during build"; exit 1; }
+          ls -l usr/cache/
 
       - name: Ensure RPATH with patchelf
         run: |
@@ -162,7 +165,13 @@ jobs:
             echo "Fontconfig file not found!"
             exit 1
           fi
-          fc-list | grep -i "DejaVu Sans Mono" || { echo "DejaVu Sans Mono not found in fontconfig!"; exit 1; }
+          # Regenerate font cache if DejaVu Sans Mono is not found
+          if ! fc-list | grep -i "DejaVu Sans Mono" >/dev/null; then
+            echo "DejaVu Sans Mono not found, regenerating font cache..."
+            fc-cache -fv "\$DIR/../share/fonts" || { echo "Failed to generate font cache"; exit 1; }
+          fi
+          echo "Fontconfig fonts detected:"
+          fc-list | grep -i "DejaVu Sans Mono" || { echo "DejaVu Sans Mono still not found in fontconfig!"; exit 1; }
           CONFIG="\$DIR/../config/config.toml"
           if [ -f "\$CONFIG" ]; then
             mkdir -p ~/.config/rio
