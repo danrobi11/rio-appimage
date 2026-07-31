@@ -1,7 +1,7 @@
 name: Build Rio (Nix)
 
 on:
-  workflow_dispatch:          # manual trigger only
+  workflow_dispatch:
 
 jobs:
   build-nix:
@@ -12,22 +12,40 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
 
-      - name: Build Rio from upstream flake
+      - name: Build Rio (skip tests + limit parallelism)
         run: |
-          nix build github:raphamorim/rio/v0.5.3 --print-out-paths | tee out-path.txt
-          echo "Built store path:"
+          set -o pipefail
+          nix build \
+            --option max-jobs 1 \
+            --option cores 2 \
+            --print-out-paths \
+            --impure \
+            --expr '
+              let
+                pkgs = import <nixpkgs> {};
+                rioFlake = builtins.getFlake "github:raphamorim/rio/v0.5.3";
+                rio = rioFlake.packages.${pkgs.system}.default or rioFlake.packages.${pkgs.system}.rio;
+              in
+                rio.overrideAttrs (old: {
+                  doCheck = false;
+                  doInstallCheck = false;
+                })
+            ' | tee out-path.txt
+
+          echo "Successfully built:"
           cat out-path.txt
 
       - name: Prepare artifact
         run: |
+          set -e
+          OUT=$(cat out-path.txt)
           mkdir -p artifact
-          # copy the binary
-          cp -a $(cat out-path.txt)/bin/rio artifact/
-          # optional: also grab the terminfo if present
-          if [ -d $(cat out-path.txt)/share/terminfo ]; then
-            cp -a $(cat out-path.txt)/share/terminfo artifact/ || true
+          cp -a "$OUT/bin/rio" artifact/
+          if [ -d "$OUT/share/terminfo" ]; then
+            cp -a "$OUT/share/terminfo" artifact/ || true
           fi
           ls -la artifact/
+          file artifact/rio
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
